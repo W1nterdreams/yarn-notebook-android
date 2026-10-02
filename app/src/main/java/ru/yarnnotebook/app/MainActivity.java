@@ -625,7 +625,7 @@ public class MainActivity extends Activity {
         fManufacturer = addAutoField(form, "Производитель", "Например: Cariaggi", textCaps, "manufacturer");
         fName = addAutoField(form, "Артикул/название", "Например: Superlana", textCaps, "name");
         fShade = addAutoField(form, "Оттенок", "Например: Бордовый", textCaps, "shade");
-        fColor = addAutoField(form, "Цвет", "Например: Красный", textCaps, "color");
+        fColor = addAutoField(form, "Цвет", "Например: красный", InputType.TYPE_CLASS_TEXT, "color");
 
         addCompositionEditor(form, existing == null ? "" : existing.composition);
 
@@ -821,8 +821,8 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams p1 = new LinearLayout.LayoutParams(0, dp(50), 0.34f);
         row.root.addView(percentWrap, p1);
 
-        row.material = autoInput("Меринос", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, "material");
-        if (!blank(materialValue)) row.material.setText(materialValue);
+        row.material = autoInput("меринос", InputType.TYPE_CLASS_TEXT, "material");
+        if (!blank(materialValue)) row.material.setText(lowerFirst(materialValue));
         LinearLayout.LayoutParams p2 = new LinearLayout.LayoutParams(0, dp(50), 0.66f);
         p2.setMargins(dp(6), 0, 0, 0);
         row.root.addView(row.material, p2);
@@ -858,7 +858,7 @@ public class MainActivity extends Activity {
         StringBuilder b = new StringBuilder();
         for (CompositionRow row : compositionRows) {
             String percent = s(row.percent).replace(',', '.');
-            String material = s(row.material);
+            String material = lowerFirst(s(row.material));
             if (blank(percent) || blank(material)) continue;
             if (b.length() > 0) b.append(", ");
             b.append(percent).append("% ").append(material);
@@ -1011,7 +1011,7 @@ public class MainActivity extends Activity {
         r.country = s(fCountry);
         r.manufacturer = s(fManufacturer);
         r.name = s(fName);
-        r.color = s(fColor);
+        r.color = lowerFirst(s(fColor));
         r.shade = s(fShade);
         r.composition = collectComposition();
         r.lengthPer100 = s(fLength);
@@ -1027,7 +1027,7 @@ public class MainActivity extends Activity {
         fCountry.setText(r.country);
         fManufacturer.setText(r.manufacturer);
         fName.setText(r.name);
-        fColor.setText(r.color);
+        fColor.setText(lowerFirst(r.color));
         fShade.setText(r.shade);
         fLength.setText(r.lengthPer100);
         fThread.setText(r.threadParams);
@@ -1069,7 +1069,7 @@ public class MainActivity extends Activity {
 
     private String buildVkText(YarnRecord r) {
         StringBuilder b = new StringBuilder();
-        b.append("#Калькулятор\n\n");
+        b.append("#Манияпряжи\n\n");
         addLine(b, "Страна", r.country);
         addLine(b, "Производитель", r.manufacturer);
         addLine(b, "Артикул/название", r.name);
@@ -1171,13 +1171,13 @@ public class MainActivity extends Activity {
             }
         });
         e.setOnItemClickListener((parent, view, position, id) -> {
-            Object item = parent.getItemAtPosition(position);
-            if (item != null) {
-                String value = item.toString();
+            String value = e.getText() == null ? "" : e.getText().toString();
+            if ("color".equals(suggestionField) || "material".equals(suggestionField)) {
+                value = lowerFirst(value);
                 e.setText(value, false);
-                e.setSelection(value.length());
-                e.dismissDropDown();
             }
+            if (!value.isEmpty()) e.setSelection(value.length());
+            e.dismissDropDown();
         });
         return e;
     }
@@ -1522,6 +1522,12 @@ public class MainActivity extends Activity {
     }
 
     private String s(EditText e) { return e == null ? "" : e.getText().toString().trim(); }
+    private String lowerFirst(String value) {
+        if (value == null || value.isEmpty()) return value == null ? "" : value;
+        int first = value.offsetByCodePoints(0, 1);
+        return value.substring(0, first).toLowerCase(Locale.getDefault()) + value.substring(first);
+    }
+
     private boolean blank(String s) { return s == null || s.trim().isEmpty(); }
 
     private String displayTitle(YarnRecord y) {
