@@ -77,6 +77,8 @@ public class MainActivity extends Activity {
             fThread, fAvailability, fPrice, fStorage, fDescription;
     private LinearLayout compositionContainer;
     private final List<CompositionRow> compositionRows = new ArrayList<>();
+    private LinearLayout bobbinWeightContainer;
+    private final List<EditText> bobbinWeightFields = new ArrayList<>();
 
     private enum Screen { HOME, LAYOUT, EDIT, GLOBAL_SEARCH }
 
@@ -641,6 +643,28 @@ public class MainActivity extends Activity {
         fAvailability = availabilityPrice[0];
         fPrice = availabilityPrice[1];
 
+        bobbinWeightFields.clear();
+        bobbinWeightFields.add(fAvailability);
+        bobbinWeightContainer = vertical();
+        form.addView(bobbinWeightContainer);
+
+        Button bobbinPlus = button("＋");
+        bobbinPlus.setTextSize(22);
+        GradientDrawable bobbinPlusBg = new GradientDrawable();
+        bobbinPlusBg.setColor(SURFACE);
+        bobbinPlusBg.setCornerRadius(dp(10));
+        bobbinPlusBg.setStroke(dp(1), BORDER);
+        bobbinPlus.setBackground(bobbinPlusBg);
+        LinearLayout.LayoutParams bobbinPlusParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        bobbinPlusParams.setMargins(0, dp(3), 0, dp(4));
+        form.addView(bobbinPlus, bobbinPlusParams);
+        bobbinPlus.setOnClickListener(v -> {
+            EditText field = addBobbinWeightField("");
+            field.requestFocus();
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT);
+        });
+
         fStorage = addAutoField(form, "Место хранения", "Например: Стеллаж 2, ячейка Б4", textCaps, "storage");
 
         fDescription = addField(form, "Описание", "Свободный текст для товара", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, 8);
@@ -872,6 +896,69 @@ public class MainActivity extends Activity {
         return new EditText[]{e1, e2};
     }
 
+    private EditText addBobbinWeightField(String value) {
+        if (bobbinWeightContainer == null) throw new IllegalStateException("Bobbin weight container is not ready");
+
+        int bobbinNumber = bobbinWeightFields.size() + 1;
+        LinearLayout wrap = vertical();
+
+        TextView label = text("Вес бобины " + bobbinNumber + ", г", 14, TEXT, true);
+        label.setPadding(dp(2), dp(8), 0, dp(5));
+        wrap.addView(label);
+
+        EditText field = input("400", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL, 1);
+        if (!blank(value)) field.setText(value.trim());
+        wrap.addView(field, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 0, 0, dp(4));
+        bobbinWeightContainer.addView(wrap, params);
+        bobbinWeightFields.add(field);
+        return field;
+    }
+
+    private String collectBobbinWeights() {
+        StringBuilder out = new StringBuilder();
+        for (EditText field : bobbinWeightFields) {
+            String value = s(field);
+            if (blank(value)) continue;
+            if (out.length() > 0) out.append("; ");
+            out.append(value.trim());
+        }
+        return out.toString();
+    }
+
+    private void fillBobbinWeights(String availability) {
+        if (fAvailability == null) return;
+
+        if (bobbinWeightContainer != null) bobbinWeightContainer.removeAllViews();
+        bobbinWeightFields.clear();
+        bobbinWeightFields.add(fAvailability);
+        fAvailability.setText("");
+
+        if (blank(availability)) return;
+
+        String[] weights = availability.split("\\s*;\\s*");
+        if (weights.length > 0) fAvailability.setText(weights[0].trim());
+        for (int i = 1; i < weights.length; i++) {
+            if (!blank(weights[i])) addBobbinWeightField(weights[i].trim());
+        }
+    }
+
+    private String formatBobbinWeightsForVk(String availability) {
+        if (blank(availability)) return "";
+        String[] weights = availability.split("\\s*;\\s*");
+        StringBuilder out = new StringBuilder();
+        for (String weight : weights) {
+            if (blank(weight)) continue;
+            if (out.length() > 0) out.append(", ");
+            out.append(weight.trim());
+        }
+        return out.toString();
+    }
+
     private YarnRecord collect(YarnRecord existing) {
         YarnRecord r = new YarnRecord();
         if (existing != null) {
@@ -887,7 +974,7 @@ public class MainActivity extends Activity {
         r.composition = collectComposition();
         r.lengthPer100 = s(fLength);
         r.threadParams = s(fThread);
-        r.availability = s(fAvailability);
+        r.availability = collectBobbinWeights();
         r.pricePer100 = s(fPrice);
         r.storageLocation = s(fStorage);
         r.description = s(fDescription);
@@ -902,7 +989,7 @@ public class MainActivity extends Activity {
         fShade.setText(r.shade);
         fLength.setText(r.lengthPer100);
         fThread.setText(r.threadParams);
-        fAvailability.setText(r.availability);
+        fillBobbinWeights(r.availability);
         fPrice.setText(r.pricePer100);
         fStorage.setText(r.storageLocation);
         fDescription.setText(r.description);
@@ -959,7 +1046,7 @@ public class MainActivity extends Activity {
             }
             b.append("\n");
         }
-        if (!blank(r.availability)) addLine(b, "Наличие", r.availability.trim() + " г");
+        if (!blank(r.availability)) addLine(b, "Наличие", formatBobbinWeightsForVk(r.availability) + " г");
         if (!blank(r.pricePer100)) addLine(b, "Цена", r.pricePer100.trim() + " ₽ / 100 г");
         if (!blank(r.description)) {
             if (b.length() > 0) b.append("\n");
