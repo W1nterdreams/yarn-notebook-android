@@ -79,6 +79,8 @@ public class MainActivity extends Activity {
     private final List<CompositionRow> compositionRows = new ArrayList<>();
     private LinearLayout bobbinWeightContainer;
     private final List<EditText> bobbinWeightFields = new ArrayList<>();
+    private final List<LinearLayout> bobbinWeightRowViews = new ArrayList<>();
+    private final List<TextView> bobbinWeightLabels = new ArrayList<>();
 
     private enum Screen { HOME, LAYOUT, EDIT, GLOBAL_SEARCH }
 
@@ -644,6 +646,8 @@ public class MainActivity extends Activity {
         fPrice = availabilityPrice[1];
 
         bobbinWeightFields.clear();
+        bobbinWeightRowViews.clear();
+        bobbinWeightLabels.clear();
         bobbinWeightFields.add(fAvailability);
         bobbinWeightContainer = vertical();
         form.addView(bobbinWeightContainer);
@@ -899,24 +903,60 @@ public class MainActivity extends Activity {
     private EditText addBobbinWeightField(String value) {
         if (bobbinWeightContainer == null) throw new IllegalStateException("Bobbin weight container is not ready");
 
-        int bobbinNumber = bobbinWeightFields.size() + 1;
-        LinearLayout wrap = vertical();
+        LinearLayout row = horizontal();
+        row.setGravity(Gravity.TOP);
 
-        TextView label = text("Вес бобины " + bobbinNumber + ", г", 14, TEXT, true);
+        LinearLayout left = vertical();
+        TextView label = text("", 14, TEXT, true);
         label.setPadding(dp(2), dp(8), 0, dp(5));
-        wrap.addView(label);
+        left.addView(label);
 
         EditText field = input("400", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL, 1);
         if (!blank(value)) field.setText(value.trim());
-        wrap.addView(field, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        left.addView(field, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+
+        LinearLayout right = vertical();
+        right.setPadding(dp(8), dp(35), 0, 0);
+
+        Button remove = button("×");
+        remove.setTextSize(24);
+        GradientDrawable removeBg = new GradientDrawable();
+        removeBg.setColor(SURFACE);
+        removeBg.setCornerRadius(dp(10));
+        removeBg.setStroke(dp(1), BORDER);
+        remove.setBackground(removeBg);
+        right.addView(remove, new LinearLayout.LayoutParams(dp(52), dp(52)));
+
+        row.addView(left, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.45f));
+        row.addView(right, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.55f));
 
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         params.setMargins(0, 0, 0, dp(4));
-        bobbinWeightContainer.addView(wrap, params);
+        bobbinWeightContainer.addView(row, params);
+
         bobbinWeightFields.add(field);
+        bobbinWeightRowViews.add(row);
+        bobbinWeightLabels.add(label);
+        refreshBobbinWeightLabels();
+
+        remove.setOnClickListener(v -> {
+            field.clearFocus();
+            bobbinWeightContainer.removeView(row);
+            bobbinWeightFields.remove(field);
+            bobbinWeightRowViews.remove(row);
+            bobbinWeightLabels.remove(label);
+            refreshBobbinWeightLabels();
+        });
+
         return field;
+    }
+
+    private void refreshBobbinWeightLabels() {
+        for (int i = 0; i < bobbinWeightLabels.size(); i++) {
+            bobbinWeightLabels.get(i).setText("Вес бобины " + (i + 2) + ", г");
+        }
     }
 
     private String collectBobbinWeights() {
@@ -935,6 +975,8 @@ public class MainActivity extends Activity {
 
         if (bobbinWeightContainer != null) bobbinWeightContainer.removeAllViews();
         bobbinWeightFields.clear();
+        bobbinWeightRowViews.clear();
+        bobbinWeightLabels.clear();
         bobbinWeightFields.add(fAvailability);
         fAvailability.setText("");
 
