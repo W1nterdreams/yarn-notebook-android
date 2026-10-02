@@ -10,8 +10,8 @@ android {
         applicationId 'ru.yarnnotebook.app'
         minSdk 23
         targetSdk 36
-        versionCode 16
-        versionName '0.2.15'
+        versionCode 17
+        versionName '0.2.16'
     }
 
     signingConfigs {
