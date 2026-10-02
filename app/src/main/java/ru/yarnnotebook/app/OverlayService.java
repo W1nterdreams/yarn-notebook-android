@@ -8,7 +8,9 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.IBinder;
 import android.provider.Settings;
@@ -89,6 +91,15 @@ public class OverlayService extends Service {
         if (windowManager == null || bubble != null) return;
 
         bubble = new ImageView(this);
+
+        GradientDrawable bubbleBackground = new GradientDrawable();
+        bubbleBackground.setColor(Color.rgb(70, 52, 45));
+        bubbleBackground.setCornerRadius(dp(16));
+        bubbleBackground.setStroke(dp(2), Color.rgb(55, 40, 34));
+        bubble.setBackground(bubbleBackground);
+        bubble.setPadding(dp(3), dp(3), dp(3), dp(3));
+        bubble.setClipToOutline(true);
+
         bubble.setImageResource(R.mipmap.app_icon);
         bubble.setScaleType(ImageView.ScaleType.CENTER_CROP);
         bubble.setContentDescription("Открыть Моя пряжа");
