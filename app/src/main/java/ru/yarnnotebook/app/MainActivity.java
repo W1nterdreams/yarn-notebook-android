@@ -658,7 +658,27 @@ public class MainActivity extends Activity {
         if (existing == null) fCountry.setText("Италия");
         fManufacturer = addAutoField(form, "Производитель", "Например: Cariaggi", textCaps, "manufacturer");
         fName = addAutoField(form, "Артикул/название", "Например: Superlana", textCaps, "name");
-        fShade = addAutoField(form, "Оттенок", "Например: Бордовый", textCaps, "shade");
+        fShade = addAutoField(form, "Оттенок", "Например: бордовый", InputType.TYPE_CLASS_TEXT, "shade");
+        fShade.addTextChangedListener(new TextWatcher() {
+            private boolean changing = false;
+
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+
+            @Override
+            public void afterTextChanged(Editable text) {
+                if (changing || text == null || text.length() == 0) return;
+                String current = text.toString();
+                String normalized = lowerFirst(current);
+                if (!current.equals(normalized)) {
+                    changing = true;
+                    int cursor = Math.max(0, fShade.getSelectionStart());
+                    fShade.setText(normalized);
+                    fShade.setSelection(Math.min(cursor, normalized.length()));
+                    changing = false;
+                }
+            }
+        });
         fColor = addAutoField(form, "Цвет", "Например: красный", InputType.TYPE_CLASS_TEXT, "color");
         fColor.addTextChangedListener(new TextWatcher() {
             private boolean changing = false;
@@ -1066,7 +1086,7 @@ public class MainActivity extends Activity {
         r.manufacturer = s(fManufacturer);
         r.name = s(fName);
         r.color = lowerFirst(s(fColor));
-        r.shade = s(fShade);
+        r.shade = lowerFirst(s(fShade));
         r.composition = collectComposition();
         r.lengthPer100 = s(fLength);
         r.threadParams = s(fThread);
@@ -1082,7 +1102,7 @@ public class MainActivity extends Activity {
         fManufacturer.setText(r.manufacturer);
         fName.setText(r.name);
         fColor.setText(lowerFirst(r.color));
-        fShade.setText(r.shade);
+        fShade.setText(lowerFirst(r.shade));
         fLength.setText(r.lengthPer100);
         fThread.setText(r.threadParams);
         fillBobbinWeights(r.availability);
