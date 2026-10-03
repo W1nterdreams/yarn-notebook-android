@@ -184,7 +184,9 @@ public class MainActivity extends Activity {
             empty.setPadding(dp(20), dp(80), dp(20), dp(20));
             list.addView(empty);
         } else {
-            for (LayoutRecord r : layouts) list.addView(layoutCard(r));
+            for (int i = 0; i < layouts.size(); i++) {
+                list.addView(layoutCard(layouts.get(i), i + 1));
+            }
         }
         scroll.addView(list);
         page.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
@@ -197,9 +199,9 @@ public class MainActivity extends Activity {
         setContentView(page);
     }
 
-    private View layoutCard(LayoutRecord r) {
+    private View layoutCard(LayoutRecord r, int number) {
         LinearLayout card = card();
-        TextView date = text(formatDate(r.dateIso), 21, TEXT, true);
+        TextView date = text("№" + number + " · " + formatDate(r.dateIso), 21, TEXT, true);
         card.addView(date);
         if (!blank(r.description)) {
             TextView description = text(r.description, 16, TEXT, false);
@@ -386,16 +388,28 @@ public class MainActivity extends Activity {
             list.addView(empty);
             return;
         }
-        for (YarnRecord y : yarns) list.addView(yarnCard(y, false));
+
+        List<YarnRecord> allYarns = db.getYarnsForLayout(layoutId, "");
+        for (YarnRecord y : yarns) {
+            int number = 0;
+            for (int i = 0; i < allYarns.size(); i++) {
+                if (allYarns.get(i).id == y.id) {
+                    number = i + 1;
+                    break;
+                }
+            }
+            list.addView(yarnCard(y, false, number));
+        }
     }
 
-    private View yarnCard(YarnRecord y, boolean showDate) {
+    private View yarnCard(YarnRecord y, boolean showDate, int number) {
         LinearLayout card = card();
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
 
         LinearLayout titleRow = horizontal();
         titleRow.setGravity(Gravity.TOP);
-        TextView title = text(displayTitle(y), 19, TEXT, true);
+        String numberedTitle = number > 0 ? "№" + number + " · " + displayTitle(y) : displayTitle(y);
+        TextView title = text(numberedTitle, 19, TEXT, true);
         titleRow.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         if (!y.saved) {
             TextView draft = text("НЕ СОХРАНЕНА", 11, DRAFT, true);
@@ -568,7 +582,7 @@ public class MainActivity extends Activity {
                 empty.setPadding(dp(20), dp(40), dp(20), dp(20));
                 results.addView(empty);
             } else {
-                for (YarnRecord y : found) results.addView(yarnCard(y, true));
+                for (YarnRecord y : found) results.addView(yarnCard(y, true, 0));
             }
         };
 
@@ -1160,11 +1174,28 @@ public class MainActivity extends Activity {
                     return;
                 }
                 List<String> suggestions = db.getSuggestions(suggestionField, q, 1);
+                if (!suggestions.isEmpty() && suggestions.get(0).trim().equalsIgnoreCase(q)) {
+                    adapter.clear();
+                    adapter.notifyDataSetChanged();
+                    e.dismissDropDown();
+                    return;
+                }
+
                 adapter.clear();
                 adapter.addAll(suggestions);
                 adapter.notifyDataSetChanged();
                 if (!suggestions.isEmpty() && e.hasFocus()) {
-                    e.post(e::showDropDown);
+                    e.post(() -> {
+                        String current = e.getText() == null ? "" : e.getText().toString().trim();
+                        String suggestion = adapter.getCount() > 0 && adapter.getItem(0) != null
+                                ? adapter.getItem(0).trim()
+                                : "";
+                        if (!current.isEmpty() && current.equalsIgnoreCase(suggestion)) {
+                            e.dismissDropDown();
+                        } else if (e.hasFocus() && adapter.getCount() > 0) {
+                            e.showDropDown();
+                        }
+                    });
                 } else {
                     e.dismissDropDown();
                 }
@@ -1178,6 +1209,7 @@ public class MainActivity extends Activity {
             }
             if (!value.isEmpty()) e.setSelection(value.length());
             e.dismissDropDown();
+            e.post(e::dismissDropDown);
         });
         return e;
     }
