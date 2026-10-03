@@ -47,7 +47,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -67,6 +69,8 @@ public class MainActivity extends Activity {
     private Screen screen = Screen.HOME;
     private long lastHomeBackAt = 0L;
     private Runnable descriptionScrollRunnable;
+    private int homeScrollY = 0;
+    private final Map<Long, Integer> layoutScrollY = new HashMap<>();
 
     private static final int REQ_EXPORT_JSON = 7001;
     private static final int REQ_IMPORT_DATABASE = 7002;
@@ -175,6 +179,9 @@ public class MainActivity extends Activity {
         globalSearch.setOnClickListener(v -> showGlobalSearch());
 
         ScrollView scroll = new ScrollView(this);
+        final int restoreHomeScrollY = homeScrollY;
+        scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) ->
+                homeScrollY = scrollY);
         LinearLayout list = vertical();
         list.setPadding(dp(12), dp(4), dp(12), dp(90));
         List<LayoutRecord> layouts = db.getLayouts();
@@ -211,6 +218,7 @@ public class MainActivity extends Activity {
         page.addView(plus, pp);
         plus.setOnClickListener(v -> chooseLayoutDate());
         setContentView(page);
+        scroll.post(() -> scroll.scrollTo(0, restoreHomeScrollY));
     }
 
     private View layoutCard(LayoutRecord r, int number) {
@@ -371,6 +379,11 @@ public class MainActivity extends Activity {
         page.addView(search, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(62)));
 
         ScrollView scroll = new ScrollView(this);
+        final int restoreLayoutScrollY = layoutScrollY.containsKey(layoutId)
+                ? layoutScrollY.get(layoutId)
+                : 0;
+        scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) ->
+                layoutScrollY.put(layoutId, scrollY));
         LinearLayout list = vertical();
         list.setPadding(dp(12), dp(4), dp(12), dp(90));
         scroll.addView(list);
@@ -389,6 +402,7 @@ public class MainActivity extends Activity {
         page.addView(plus, pp);
         plus.setOnClickListener(v -> showEditor(layoutId, 0));
         setContentView(page);
+        scroll.post(() -> scroll.scrollTo(0, restoreLayoutScrollY));
     }
 
     private void renderYarns(LinearLayout list, long layoutId, String query) {
