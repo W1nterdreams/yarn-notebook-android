@@ -640,6 +640,26 @@ public class MainActivity extends Activity {
         fName = addAutoField(form, "Артикул/название", "Например: Superlana", textCaps, "name");
         fShade = addAutoField(form, "Оттенок", "Например: Бордовый", textCaps, "shade");
         fColor = addAutoField(form, "Цвет", "Например: красный", InputType.TYPE_CLASS_TEXT, "color");
+        fColor.addTextChangedListener(new TextWatcher() {
+            private boolean changing = false;
+
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+
+            @Override
+            public void afterTextChanged(Editable text) {
+                if (changing || text == null || text.length() == 0) return;
+                String current = text.toString();
+                String normalized = lowerFirst(current);
+                if (!current.equals(normalized)) {
+                    changing = true;
+                    int cursor = Math.max(0, fColor.getSelectionStart());
+                    fColor.setText(normalized);
+                    fColor.setSelection(Math.min(cursor, normalized.length()));
+                    changing = false;
+                }
+            }
+        });
 
         addCompositionEditor(form, existing == null ? "" : existing.composition);
 
