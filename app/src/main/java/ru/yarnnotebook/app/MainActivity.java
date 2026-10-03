@@ -178,14 +178,28 @@ public class MainActivity extends Activity {
         LinearLayout list = vertical();
         list.setPadding(dp(12), dp(4), dp(12), dp(90));
         List<LayoutRecord> layouts = db.getLayouts();
+        layouts.sort((a, b) -> {
+            boolean asc = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE)
+                    .getBoolean("layout_number_sort_asc", true);
+            return asc ? Long.compare(a.id, b.id) : Long.compare(b.id, a.id);
+        });
         if (layouts.isEmpty()) {
             TextView empty = text("Пока нет ни одной выкладки.\nСоздайте первую кнопкой ниже.", 17, MUTED, false);
             empty.setGravity(Gravity.CENTER);
             empty.setPadding(dp(20), dp(80), dp(20), dp(20));
             list.addView(empty);
         } else {
-            for (int i = 0; i < layouts.size(); i++) {
-                list.addView(layoutCard(layouts.get(i), i + 1));
+            List<LayoutRecord> numberedLayouts = new ArrayList<>(layouts);
+            numberedLayouts.sort((a, b) -> Long.compare(a.id, b.id));
+            for (LayoutRecord r : layouts) {
+                int number = 0;
+                for (int i = 0; i < numberedLayouts.size(); i++) {
+                    if (numberedLayouts.get(i).id == r.id) {
+                        number = i + 1;
+                        break;
+                    }
+                }
+                list.addView(layoutCard(r, number));
             }
         }
         scroll.addView(list);
@@ -390,6 +404,12 @@ public class MainActivity extends Activity {
         }
 
         List<YarnRecord> allYarns = db.getYarnsForLayout(layoutId, "");
+        allYarns.sort((a, b) -> Long.compare(a.id, b.id));
+
+        boolean asc = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE)
+                .getBoolean("yarn_number_sort_asc", true);
+        yarns.sort((a, b) -> asc ? Long.compare(a.id, b.id) : Long.compare(b.id, a.id));
+
         for (YarnRecord y : yarns) {
             int number = 0;
             for (int i = 0; i < allYarns.size(); i++) {
@@ -1291,13 +1311,39 @@ public class MainActivity extends Activity {
                         "Выгрузить выкладку",
                         "Добавить базу",
                         "Добавить выкладку",
+                        "Сортировка по номеру",
                         overlayItem
                 }, (dialog, which) -> {
                     if (which == 0) exportWholeDatabase();
                     else if (which == 1) exportOneLayout();
                     else if (which == 2) requestImport(true);
                     else if (which == 3) requestImport(false);
+                    else if (which == 4) showNumberSortDialog();
                     else toggleFloatingButton();
+                })
+                .show();
+    }
+
+    private void showNumberSortDialog() {
+        if (screen != Screen.HOME && screen != Screen.LAYOUT) {
+            Toast.makeText(this, "Сортировка доступна на экране выкладок и внутри выкладки", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Сортировка по номеру")
+                .setItems(new String[]{"№1 → №2 → №3", "№3 → №2 → №1"}, (dialog, which) -> {
+                    boolean asc = which == 0;
+                    android.content.SharedPreferences prefs =
+                            getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE);
+
+                    if (screen == Screen.HOME) {
+                        prefs.edit().putBoolean("layout_number_sort_asc", asc).apply();
+                        showHome();
+                    } else {
+                        prefs.edit().putBoolean("yarn_number_sort_asc", asc).apply();
+                        showLayout(currentLayoutId, "");
+                    }
                 })
                 .show();
     }
