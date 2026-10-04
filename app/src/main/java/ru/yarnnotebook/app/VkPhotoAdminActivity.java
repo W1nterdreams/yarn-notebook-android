@@ -108,7 +108,7 @@ public class VkPhotoAdminActivity extends ComponentActivity {
     private boolean isVkLoggedIn() {
         if (!vkSdkReady) return false;
         try {
-            return isVkLoggedIn();
+            return VK.isLoggedIn();
         } catch (Exception e) {
             vkSdkReady = false;
             vkSdkError = shortError(e);
