@@ -1,7 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" /><uses-permission android:name="android.permission.FOREGROUND_SERVICE" /><uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" /><queries><package android:name="com.vkontakte.android" /></queries><application android:allowBackup="true" android:label="Моя пряжа" android:theme="@style/AppTheme" android:enableOnBackInvokedCallback="true" android:supportsRtl="true" android:icon="@mipmap/app_icon" android:roundIcon="@mipmap/app_icon">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" /><uses-permission android:name="android.permission.FOREGROUND_SERVICE" /><uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" /><queries><package android:name="com.vkontakte.android" /></queries><application android:allowBackup="true" android:label="Моя пряжа Test" android:theme="@style/AppTheme" android:enableOnBackInvokedCallback="true" android:supportsRtl="true" android:icon="@mipmap/app_icon" android:roundIcon="@mipmap/app_icon">
+        <activity android:name=".VkPhotoAdminActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

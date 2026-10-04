@@ -207,6 +207,12 @@ public class MainActivity extends Activity {
         page.addView(archive, archiveParams);
         archive.setOnClickListener(v -> showArchive(""));
 
+        Button vkAdmin = button("Фото VK · Test");
+        LinearLayout.LayoutParams vkAdminParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+        vkAdminParams.setMargins(dp(12), 0, dp(12), dp(6));
+        page.addView(vkAdmin, vkAdminParams);
+        vkAdmin.setOnClickListener(v -> startActivity(new Intent(this, VkPhotoAdminActivity.class)));
+
         ScrollView scroll = new ScrollView(this);
         final int restoreHomeScrollY = homeScrollY;
         scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) ->
