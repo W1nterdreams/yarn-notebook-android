@@ -90,7 +90,12 @@ public class FieldEditActivity extends Activity {
         showInList.setText("Показывать значение в списке товаров");
         showInList.setTextColor(Ui.TEXT);
         showInList.setChecked(true);
+        showInList.setVisibility(View.GONE);
         form.addView(showInList);
+
+        form.addView(Ui.text(this,
+                "Какие 4 параметра показывать на товарной карточке, настраивается отдельно через «Вид карточки».",
+                12,Ui.MUTED,false));
 
         searchable = new CheckBox(this);
         searchable.setText("Участвует в поиске");
