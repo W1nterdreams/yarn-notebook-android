@@ -22,7 +22,7 @@ final class BackupManager {
 
         JSONObject root = new JSONObject();
         root.put("format", "group-admin-constructor");
-        root.put("version", 3);
+        root.put("version", 4);
         root.put("exported_at", System.currentTimeMillis());
         JSONObject jc = new JSONObject();
         jc.put("name", c.name);
@@ -54,6 +54,9 @@ final class BackupManager {
                 jf.put("show_in_list", f.showInList);
                 jf.put("searchable", f.searchable);
                 jf.put("archived", f.archived);
+                if (FieldDef.AUTO_COUNTER.equals(f.type)) {
+                    jf.put("counter_next", db.getCounterNext(f.id));
+                }
                 fields.put(jf);
             }
             jt.put("fields", fields);
@@ -103,6 +106,7 @@ final class BackupManager {
             long templateId = db.createTemplate(catalogId, jt.optString("name", "Тип товара"), jt.optString("quantity_unit", "шт."));
             db.setOutputTemplate(templateId, jt.optString("output_template", ""));
             Map<Long, Long> fieldMap = new HashMap<>();
+            Map<Long, Long> counterNextByNewField = new HashMap<>();
             JSONArray fields = jt.optJSONArray("fields");
             if (fields != null) {
                 for (int fi = 0; fi < fields.length(); fi++) {
@@ -122,6 +126,9 @@ final class BackupManager {
                     f.archived = jf.optBoolean("archived", false);
                     long newId = db.saveField(f);
                     fieldMap.put(jf.optLong("old_id", -1), newId);
+                    if (FieldDef.AUTO_COUNTER.equals(f.type) && jf.has("counter_next")) {
+                        counterNextByNewField.put(newId, jf.optLong("counter_next", AutoCounter.parse(f.optionsJson).start));
+                    }
                 }
             }
             JSONArray savedCardFields = jt.optJSONArray("card_fields");
@@ -154,6 +161,10 @@ final class BackupManager {
                     db.setRecordQuantity(recordId, jr.optDouble("quantity", 0));
                     if ("SAVED".equals(jr.optString("status"))) db.markRecordSaved(recordId);
                 }
+            }
+
+            for (Map.Entry<Long, Long> e : counterNextByNewField.entrySet()) {
+                db.setCounterNext(e.getKey(), e.getValue());
             }
         }
         return catalogId;
