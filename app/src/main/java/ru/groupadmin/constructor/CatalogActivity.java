@@ -91,21 +91,20 @@ public class CatalogActivity extends Activity {
             c.addView(Ui.spacer(this,10));
 
             LinearLayout r=Ui.row(this);
-            android.widget.Button open=Ui.primaryButton(this,"Открыть товары");
-            android.widget.Button fields=Ui.outlineButton(this,"Настроить поля");
-            r.addView(open,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1.2f));
+            android.widget.Button fields=Ui.outlineButton(this,"Поля");
+            android.widget.Button settings=Ui.outlineButton(this,"Настройки");
             r.addView(fields,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
+            r.addView(Ui.hSpacer(this,6));
+            r.addView(settings,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
             c.addView(r);
 
-            c.addView(Ui.hSpacer(this,6));
-            LinearLayout r2=Ui.row(this);
-            android.widget.Button settings=Ui.outlineButton(this,"Настройки");
+            c.addView(Ui.spacer(this,6));
             android.widget.Button del=Ui.dangerButton(this,"Удалить тип");
-            r2.addView(settings,new LinearLayout.LayoutParams(0,Ui.dp(this,44),1));
-            r2.addView(del,new LinearLayout.LayoutParams(0,Ui.dp(this,44),1));
-            c.addView(r2);
+            c.addView(del,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,44)));
 
-            open.setOnClickListener(v->openTemplate(t.id));
+            c.setClickable(true);
+            c.setFocusable(true);
+            c.setOnClickListener(v->openTemplate(t.id));
             fields.setOnClickListener(v->openFields(t.id));
             settings.setOnClickListener(v->editTemplateSettings(t));
             del.setOnClickListener(v->delete(t));
