@@ -48,6 +48,7 @@ public class RecordEditActivity extends Activity {
     private final Map<Long, FieldWidget> widgets = new LinkedHashMap<>();
     private long pendingPhotoFieldId;
     private boolean building = true;
+    private TextView stockAmount;
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
@@ -80,6 +81,8 @@ public class RecordEditActivity extends Activity {
                 true);
         stateBox.addView(state);
         root.addView(stateBox);
+
+        addStockControl(root);
 
         LinearLayout form=new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
@@ -300,11 +303,47 @@ public class RecordEditActivity extends Activity {
         w.groupRowsBox.addView(card);
     }
 
+    private void addStockControl(LinearLayout root){
+        LinearLayout stock=Ui.infoCard(this,Ui.PRIMARY_SOFT,Ui.BORDER);
+        LinearLayout row=Ui.row(this);
+
+        LinearLayout textBox=new LinearLayout(this);
+        textBox.setOrientation(LinearLayout.VERTICAL);
+        textBox.addView(Ui.text(this,"В наличии",12,Ui.MUTED,true));
+        stockAmount=Ui.text(this,Stock.display(record.quantity,template.quantityUnit),23,Ui.PRIMARY_DARK,true);
+        textBox.addView(stockAmount);
+        row.addView(textBox,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
+
+        Button minus=Ui.dangerButton(this,"−");
+        Button plus=Ui.primaryButton(this,"＋");
+        minus.setTextSize(22);
+        plus.setTextSize(20);
+        row.addView(minus,new LinearLayout.LayoutParams(Ui.dp(this,58),Ui.dp(this,50)));
+        row.addView(Ui.spacer(this,7));
+        row.addView(plus,new LinearLayout.LayoutParams(Ui.dp(this,58),Ui.dp(this,50)));
+
+        stock.addView(row);
+        stock.addView(Ui.text(this,
+                "Количество хранится отдельно от настраиваемых полей товара. Нажмите − или + и введите любое количество.",
+                11,Ui.MUTED,false));
+
+        minus.setOnClickListener(v->Stock.showAdjustDialog(this,db,recordId,template,false,this::stockChanged));
+        plus.setOnClickListener(v->Stock.showAdjustDialog(this,db,recordId,template,true,this::stockChanged));
+        root.addView(stock);
+    }
+
+    private void stockChanged(){
+        RecordItem latest=db.getRecord(recordId);
+        if(latest!=null)record=latest;
+        if(stockAmount!=null)stockAmount.setText(Stock.display(record.quantity,template.quantityUnit));
+        recalc();
+    }
+
     private void changed(){if(!building)recalc();}
 
     private void recalc(){
         Map<Long,String> raw=collectRaw(false);
-        Map<String,String> computed=RecordLogic.computeRawByName(fields,raw);
+        Map<String,String> computed=RecordLogic.computeRawByName(fields,raw,record.quantity);
         for(FieldDef f:fields){
             if(!FieldDef.FORMULA.equals(f.type))continue;
             FieldWidget w=widgets.get(f.id);
@@ -321,7 +360,7 @@ public class RecordEditActivity extends Activity {
             if(w==null)continue;
             if(FieldDef.FORMULA.equals(f.type)){
                 if(includeFormula){
-                    Map<String,String> comp=RecordLogic.computeRawByName(fields,out);
+                    Map<String,String> comp=RecordLogic.computeRawByName(fields,out,record.quantity);
                     out.put(f.id,comp.getOrDefault(f.name,"#ОШИБКА"));
                 }
                 continue;
@@ -357,7 +396,7 @@ public class RecordEditActivity extends Activity {
 
     private void copyOutput(){
         Map<Long,String> raw=collectRaw(false);
-        String text=OutputEngine.render(db,template,fields,raw);
+        String text=OutputEngine.render(db,template,fields,raw,record.quantity);
         ClipboardManager cm=(ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);
         cm.setPrimaryClip(ClipData.newPlainText("Товар",text));
         toast("Текст товара скопирован");
