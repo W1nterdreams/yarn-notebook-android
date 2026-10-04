@@ -63,17 +63,23 @@ public class RecordEditActivity extends Activity {
     private void render() {
         Map<Long,String> saved = db.getValues(recordId);
         LinearLayout root = Ui.page(this);
-        Button back=Ui.button(this,"← Товары");
+        Button back=Ui.outlineButton(this,"← Товары");
         back.setOnClickListener(v->finish());
         root.addView(back,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,44)));
 
         root.addView(Ui.title(this, template.name));
-        TextView state=Ui.subtitle(this,
+        LinearLayout stateBox = Ui.infoCard(this,
+                "DRAFT".equals(record.status) ? Ui.DRAFT_BG : Ui.SUCCESS_BG,
+                Ui.BORDER);
+        TextView state=Ui.text(this,
                 "DRAFT".equals(record.status)
-                        ? "Черновик товара · нажмите «Сохранить», чтобы зафиксировать изменения."
-                        : "Редактирование товара");
-        if("DRAFT".equals(record.status)) state.setTextColor(Ui.DRAFT);
-        root.addView(state);
+                        ? "Черновик · изменения ещё не сохранены"
+                        : "Сохранённый товар",
+                13,
+                "DRAFT".equals(record.status) ? Ui.DRAFT : Ui.SUCCESS,
+                true);
+        stateBox.addView(state);
+        root.addView(stateBox);
 
         LinearLayout form=new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
@@ -96,8 +102,8 @@ public class RecordEditActivity extends Activity {
         root.addView(Ui.scroll(this,form),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1));
 
         LinearLayout actions=Ui.row(this);
-        Button save=Ui.primaryButton(this,"Сохранить");
-        Button copy=Ui.button(this,"Копировать текст");
+        Button save=Ui.primaryButton(this,"Сохранить товар");
+        Button copy=Ui.outlineButton(this,"Копировать текст");
         actions.addView(save,new LinearLayout.LayoutParams(0,Ui.dp(this,54),1));
         actions.addView(copy,new LinearLayout.LayoutParams(0,Ui.dp(this,54),1));
         root.addView(actions);
@@ -122,7 +128,7 @@ public class RecordEditActivity extends Activity {
             w.root=c;
 
         } else if(FieldDef.DATE.equals(f.type)){
-            Button b=Ui.button(this,raw.isEmpty()?"Выбрать дату":raw);
+            Button b=Ui.outlineButton(this,raw.isEmpty()?"Выбрать дату":raw);
             b.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
             b.setOnClickListener(v->pickDate(w,b));
             w.input=b;
@@ -136,6 +142,7 @@ public class RecordEditActivity extends Activity {
             withEmpty.add("— не выбрано —");
             withEmpty.addAll(opts);
             s.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,withEmpty));
+            s.setBackground(Ui.inputBackground(this));
             int pos=withEmpty.indexOf(raw);
             s.setSelection(Math.max(0,pos));
             s.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
@@ -147,7 +154,7 @@ public class RecordEditActivity extends Activity {
             w.options=withEmpty;
 
         } else if(FieldDef.MULTI_CHOICE.equals(f.type)){
-            Button b=Ui.button(this,"");
+            Button b=Ui.outlineButton(this,"");
             w.input=b;
             w.options=options(f);
             w.selected=decodeMulti(raw);
@@ -170,7 +177,7 @@ public class RecordEditActivity extends Activity {
             }
             if(w.groupRows.isEmpty()) addGroupRow(w,new JSONObject());
 
-            Button addRow=Ui.button(this,"＋ Добавить строку");
+            Button addRow=Ui.outlineButton(this,"＋ Добавить строку");
             addRow.setOnClickListener(v->{addGroupRow(w,new JSONObject());changed();});
             groupRoot.addView(addRow,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,48)));
             w.root=groupRoot;
@@ -183,7 +190,7 @@ public class RecordEditActivity extends Activity {
             img.setMaxHeight(Ui.dp(this,220));
             img.setBackgroundColor(Color.rgb(238,238,242));
             photoBox.addView(img,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,180)));
-            Button choose=Ui.button(this,raw.isEmpty()?"Выбрать фото":"Заменить фото");
+            Button choose=Ui.outlineButton(this,raw.isEmpty()?"Выбрать фото":"Заменить фото");
             photoBox.addView(choose,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,48)));
             w.root=photoBox;
             w.image=img;
@@ -209,7 +216,7 @@ public class RecordEditActivity extends Activity {
             e.setText(raw);
             e.setTextColor(Ui.TEXT);
             e.setHintTextColor(Ui.MUTED);
-            e.setBackgroundColor(Color.rgb(250,250,252));
+            e.setBackground(Ui.inputBackground(this));
             e.setPadding(Ui.dp(this,12),Ui.dp(this,10),Ui.dp(this,12),Ui.dp(this,10));
 
             if(FieldDef.MULTILINE.equals(f.type)){
@@ -240,6 +247,8 @@ public class RecordEditActivity extends Activity {
         GroupRow row = new GroupRow();
         row.values = new LinkedHashMap<>();
         LinearLayout card = Ui.card(this);
+        card.addView(Ui.badge(this,"Строка "+(w.groupRows.size()+1),Ui.PRIMARY_DARK,Ui.PRIMARY_SOFT));
+        card.addView(Ui.spacer(this,8));
 
         for(RepeatGroup.SubField sub : w.groupConfig) {
             TextView label=Ui.text(this,sub.name + (sub.unit.isEmpty()?"":" · "+sub.unit),13,Ui.MUTED,true);
@@ -259,7 +268,7 @@ public class RecordEditActivity extends Activity {
                 e.setText(value);
                 e.setTextColor(Ui.TEXT);
                 e.setHintTextColor(Ui.MUTED);
-                e.setBackgroundColor(Color.rgb(250,250,252));
+                e.setBackground(Ui.inputBackground(this));
                 e.setPadding(Ui.dp(this,10),Ui.dp(this,8),Ui.dp(this,10),Ui.dp(this,8));
                 e.setSingleLine(true);
                 if(FieldDef.INTEGER.equals(sub.type))
@@ -277,7 +286,7 @@ public class RecordEditActivity extends Activity {
             card.addView(input,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,48)));
         }
 
-        Button remove=Ui.button(this,"Удалить строку");
+        Button remove=Ui.dangerButton(this,"Удалить строку");
         remove.setOnClickListener(v->{
             w.groupRows.remove(row);
             w.groupRowsBox.removeView(card);
