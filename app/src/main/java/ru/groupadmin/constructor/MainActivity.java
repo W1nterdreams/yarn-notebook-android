@@ -78,14 +78,16 @@ public class MainActivity extends Activity {
             card.addView(stats);
             card.addView(Ui.spacer(this,10));
             LinearLayout row=Ui.row(this);
-            android.widget.Button open=Ui.primaryButton(this,"Открыть");
             android.widget.Button rename=Ui.outlineButton(this,"Название");
             android.widget.Button del=Ui.dangerButton(this,"Удалить");
-            row.addView(open,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
             row.addView(rename,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
+            row.addView(Ui.hSpacer(this,6));
             row.addView(del,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
             card.addView(row);
-            open.setOnClickListener(v->openCatalog(c.id));
+
+            card.setClickable(true);
+            card.setFocusable(true);
+            card.setOnClickListener(v->openCatalog(c.id));
             rename.setOnClickListener(v->renameCatalog(c));
             del.setOnClickListener(v->confirmDelete(c));
             list.addView(card);
