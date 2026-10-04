@@ -22,7 +22,7 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 final class Ui {
-    static final int BG = Color.rgb(247, 246, 250);
+    static final int BG = Color.rgb(246, 244, 249);
     static final int CARD = Color.WHITE;
     static final int TEXT = Color.rgb(32, 27, 37);
     static final int MUTED = Color.rgb(108, 101, 115);
@@ -31,8 +31,8 @@ final class Ui {
     static final int PRIMARY_DARK = Color.rgb(79, 55, 139);
     static final int PRIMARY_SOFT = Color.rgb(238, 233, 250);
 
-    static final int BORDER = Color.rgb(229, 224, 234);
-    static final int FIELD_BG = Color.rgb(250, 249, 252);
+    static final int BORDER = Color.rgb(198, 190, 210);
+    static final int FIELD_BG = Color.rgb(255, 255, 255);
 
     static final int DANGER = Color.rgb(186, 26, 26);
     static final int DANGER_BG = Color.rgb(255, 218, 214);
@@ -121,21 +121,21 @@ final class Ui {
     static Button primaryButton(Context c, String text) {
         Button b = button(c, text);
         b.setTextColor(Color.WHITE);
-        b.setBackground(ripple(PRIMARY, Color.argb(45, 255, 255, 255), 13, c, 0, 0));
+        b.setBackground(ripple(PRIMARY, Color.argb(45, 255, 255, 255), 13, c, PRIMARY_DARK, 1));
         return b;
     }
 
     static Button outlineButton(Context c, String text) {
         Button b = button(c, text);
         b.setTextColor(PRIMARY_DARK);
-        b.setBackground(ripple(CARD, Color.argb(22, 102, 80, 164), 13, c, BORDER, 1));
+        b.setBackground(ripple(Color.rgb(250, 248, 253), Color.argb(30, 102, 80, 164), 13, c, PRIMARY, 1));
         return b;
     }
 
     static Button dangerButton(Context c, String text) {
         Button b = button(c, text);
         b.setTextColor(DANGER);
-        b.setBackground(ripple(DANGER_BG, Color.argb(25, 186, 26, 26), 13, c, 0, 0));
+        b.setBackground(ripple(DANGER_BG, Color.argb(25, 186, 26, 26), 13, c, Color.rgb(224, 150, 146), 1));
         return b;
     }
 
@@ -151,8 +151,8 @@ final class Ui {
         LinearLayout v = new LinearLayout(c);
         v.setOrientation(LinearLayout.VERTICAL);
         v.setPadding(dp(c, 15), dp(c, 14), dp(c, 15), dp(c, 14));
-        v.setBackground(roundStroke(CARD, BORDER, 1, 16, c));
-        if (Build.VERSION.SDK_INT >= 21) v.setElevation(dp(c, 1));
+        v.setBackground(ripple(CARD, Color.argb(20, 102, 80, 164), 16, c, BORDER, 1));
+        if (Build.VERSION.SDK_INT >= 21) v.setElevation(dp(c, 2));
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -191,7 +191,7 @@ final class Ui {
     }
 
     static android.graphics.drawable.Drawable inputBackground(Context c) {
-        return ripple(FIELD_BG, Color.argb(18, 102, 80, 164), 12, c, BORDER, 1);
+        return ripple(FIELD_BG, Color.argb(20, 102, 80, 164), 12, c, Color.rgb(176, 166, 194), 1);
     }
 
     private static android.graphics.drawable.Drawable ripple(
