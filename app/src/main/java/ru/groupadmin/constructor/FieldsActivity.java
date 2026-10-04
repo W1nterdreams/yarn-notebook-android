@@ -33,18 +33,19 @@ public class FieldsActivity extends Activity {
         template = db.getTemplate(templateId);
         if (template == null) { finish(); return; }
         LinearLayout root = Ui.page(this);
-        android.widget.Button back = Ui.button(this, "← " + template.name);
+        android.widget.Button back = Ui.outlineButton(this, "← " + template.name);
         back.setOnClickListener(v -> finish());
         root.addView(back, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 44)));
-        root.addView(Ui.title(this, "Поля товара"));
-        root.addView(Ui.subtitle(this, "Порядок полей здесь станет порядком ввода в товаре. Удаление безопасное: поле сначала архивируется, данные не стираются."));
 
-        LinearLayout actions = Ui.row(this);
-        android.widget.Button add = Ui.primaryButton(this, "＋ Добавить поле");
-        android.widget.Button archive = Ui.button(this, "Архив");
-        actions.addView(add, new LinearLayout.LayoutParams(0, Ui.dp(this, 50), 1));
-        actions.addView(archive, new LinearLayout.LayoutParams(0, Ui.dp(this, 50), 1));
-        root.addView(actions);
+        root.addView(Ui.title(this, "Поля товара"));
+        root.addView(Ui.subtitle(this, "Здесь вы проектируете форму товара. Порядок полей = порядок ввода. Поле можно архивировать без потери уже введённых данных."));
+
+        android.widget.Button add = Ui.primaryButton(this, "＋ Добавить новое поле");
+        root.addView(add, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 52)));
+        root.addView(Ui.spacer(this,6));
+        android.widget.Button archive = Ui.outlineButton(this, "Архив полей");
+        root.addView(archive, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 44)));
+        root.addView(Ui.sectionTitle(this,"СТРУКТУРА ТОВАРА"));
 
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
@@ -60,34 +61,63 @@ public class FieldsActivity extends Activity {
         list.removeAllViews();
         List<FieldDef> fields = db.getFields(templateId, false);
         if (fields.isEmpty()) {
-            LinearLayout c = Ui.card(this);
-            c.addView(Ui.text(this, "Пока нет полей", 18, Ui.TEXT, true));
-            c.addView(Ui.text(this, "Добавьте любые характеристики товара: текст, числа, цену, список, дату, фото или вычисляемую формулу.", 14, Ui.MUTED, false));
+            LinearLayout c = Ui.infoCard(this, Ui.PRIMARY_SOFT, Ui.BORDER);
+            c.addView(Ui.text(this, "Пока нет полей", 18, Ui.PRIMARY_DARK, true));
+            c.addView(Ui.text(this, "Добавьте любые характеристики: текст, числа, цену, выбор из списка, повторяемые группы, дату, фото или формулу.", 14, Ui.MUTED, false));
             list.addView(c);
             return;
         }
         for (int i = 0; i < fields.size(); i++) {
             FieldDef f = fields.get(i);
             LinearLayout c = Ui.card(this);
-            c.addView(Ui.text(this, (i + 1) + ". " + f.name, 18, Ui.TEXT, true));
-            StringBuilder meta = new StringBuilder(FieldDef.humanType(f.type));
-            if (f.required) meta.append(" · обязательное");
-            if (f.showInList) meta.append(" · в списке");
-            if (f.searchable) meta.append(" · поиск");
-            if (f.unit != null && !f.unit.isEmpty()) meta.append(" · ").append(f.unit);
-            c.addView(Ui.text(this, meta.toString(), 13, Ui.MUTED, false));
-            if (FieldDef.FORMULA.equals(f.type)) c.addView(Ui.text(this, "Формула: " + f.formula, 13, Ui.PRIMARY, false));
 
+            LinearLayout head = Ui.row(this);
+            head.addView(Ui.text(this, (i + 1) + ". " + f.name, 18, Ui.TEXT, true),
+                    new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            head.addView(Ui.badge(this, FieldDef.humanType(f.type), Ui.PRIMARY_DARK, Ui.PRIMARY_SOFT));
+            c.addView(head);
+            c.addView(Ui.spacer(this,8));
+
+            LinearLayout meta = Ui.row(this);
+            if (f.required) {
+                meta.addView(Ui.badge(this,"Обязательное",Ui.DANGER,Ui.DANGER_BG));
+                meta.addView(Ui.spacer(this,5));
+            }
+            if (f.showInList) {
+                meta.addView(Ui.badge(this,"В списке",Ui.SUCCESS,Ui.SUCCESS_BG));
+                meta.addView(Ui.spacer(this,5));
+            }
+            if (f.searchable) meta.addView(Ui.badge(this,"Поиск",Ui.PRIMARY_DARK,Ui.PRIMARY_SOFT));
+            c.addView(meta);
+
+            if (f.unit != null && !f.unit.isEmpty()) {
+                c.addView(Ui.spacer(this,6));
+                c.addView(Ui.text(this,"Единица измерения: "+f.unit,13,Ui.MUTED,false));
+            }
+            if (FieldDef.FORMULA.equals(f.type)) {
+                c.addView(Ui.spacer(this,6));
+                c.addView(Ui.text(this,"Формула: " + f.formula,13,Ui.PRIMARY_DARK,true));
+            }
+            if (FieldDef.REPEAT_GROUP.equals(f.type)) {
+                c.addView(Ui.spacer(this,6));
+                c.addView(Ui.text(this,"Подполей: " + RepeatGroup.parseConfig(f.optionsJson).size(),13,Ui.MUTED,false));
+            }
+
+            c.addView(Ui.spacer(this,10));
             LinearLayout r = Ui.row(this);
-            android.widget.Button up = Ui.button(this, "↑");
-            android.widget.Button down = Ui.button(this, "↓");
-            android.widget.Button edit = Ui.primaryButton(this, "Изменить");
-            android.widget.Button hide = Ui.button(this, "В архив");
-            r.addView(up, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 0.6f));
-            r.addView(down, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 0.6f));
-            r.addView(edit, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1.4f));
-            r.addView(hide, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1.2f));
+            android.widget.Button up = Ui.outlineButton(this, "↑ Выше");
+            android.widget.Button down = Ui.outlineButton(this, "↓ Ниже");
+            r.addView(up, new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1));
+            r.addView(down, new LinearLayout.LayoutParams(0, Ui.dp(this, 42), 1));
             c.addView(r);
+
+            c.addView(Ui.spacer(this,6));
+            LinearLayout r2 = Ui.row(this);
+            android.widget.Button edit = Ui.primaryButton(this, "Изменить");
+            android.widget.Button hide = Ui.dangerButton(this, "В архив");
+            r2.addView(edit, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1.2f));
+            r2.addView(hide, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1));
+            c.addView(r2);
             up.setEnabled(i > 0);
             down.setEnabled(i < fields.size() - 1);
             up.setOnClickListener(v -> { db.moveField(f.id, -1); refresh(); });
