@@ -11,6 +11,7 @@ final class CardTemplate {
     long catalogId;
     String name;
     String outputTemplate;
+    String quantityUnit;
     long createdAt;
 }
 
@@ -67,6 +68,7 @@ final class RecordItem {
     long id;
     long templateId;
     String status;
+    double quantity;
     long createdAt;
     long updatedAt;
 }
