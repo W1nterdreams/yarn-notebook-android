@@ -173,23 +173,30 @@ public class TemplateActivity extends Activity {
 
         c.addView(Ui.spacer(this,12));
         LinearLayout row=Ui.row(this);
-        android.widget.Button open=Ui.primaryButton(this,"Открыть");
+        android.widget.Button blank=Ui.primaryButton(this,"Скопировать шаблон");
         android.widget.Button copy=Ui.outlineButton(this,"Скопировать текст");
-        row.addView(open,new LinearLayout.LayoutParams(0,Ui.dp(this,44),1));
+        row.addView(blank,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1.2f));
         row.addView(Ui.hSpacer(this,6));
-        row.addView(copy,new LinearLayout.LayoutParams(0,Ui.dp(this,44),1.25f));
+        row.addView(copy,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1.2f));
         c.addView(row);
 
         c.addView(Ui.spacer(this,6));
         LinearLayout row2=Ui.row(this);
-        android.widget.Button dup=Ui.outlineButton(this,"Создать копию");
+        android.widget.Button dup=Ui.outlineButton(this,"Копия с данными");
         android.widget.Button del=Ui.dangerButton(this,"Удалить");
         row2.addView(dup,new LinearLayout.LayoutParams(0,Ui.dp(this,42),1));
         row2.addView(Ui.hSpacer(this,6));
         row2.addView(del,new LinearLayout.LayoutParams(0,Ui.dp(this,42),1));
         c.addView(row2);
 
-        open.setOnClickListener(v->openRecord(r.id));
+        c.setClickable(true);
+        c.setFocusable(true);
+        c.setOnClickListener(v->openRecord(r.id));
+
+        blank.setOnClickListener(v->{
+            long id=db.createBlankRecord(templateId);
+            openRecord(id);
+        });
         dup.setOnClickListener(v->{long id=db.duplicateRecord(r.id);openRecord(id);});
         copy.setOnClickListener(v->copyText(r.id));
         del.setOnClickListener(v->new AlertDialog.Builder(this)
@@ -319,7 +326,8 @@ public class TemplateActivity extends Activity {
             photo.setBackground(Ui.roundStroke(Ui.CARD,Ui.BORDER,1,12,this));
             photo.setClipToOutline(true);
             try{
-                photo.setImageURI(Uri.parse(photoUri));
+                Uri display=AppPhotoStore.displayUri(photoUri);
+                if(display!=null) photo.setImageURI(display);
             }catch(Exception ignored){
                 photo.setImageDrawable(null);
             }
