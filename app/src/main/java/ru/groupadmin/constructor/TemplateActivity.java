@@ -6,10 +6,12 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.SearchView;
 import android.widget.Spinner;
@@ -153,7 +155,7 @@ public class TemplateActivity extends Activity {
         c.addView(head);
 
         c.addView(Ui.spacer(this,10));
-        addStockControl(c,r);
+        addStockControl(c,r,vals);
 
         for(FieldDef f:getReferenceFields()){
             String v=display.get(f.name);
@@ -306,34 +308,62 @@ public class TemplateActivity extends Activity {
         return 0;
     }
 
-    private void addStockControl(LinearLayout parent, RecordItem r){
+    private void addStockControl(LinearLayout parent, RecordItem r, Map<Long,String> values){
         LinearLayout stock=Ui.infoCard(this,Ui.PRIMARY_SOFT,Ui.BORDER);
         LinearLayout row=Ui.row(this);
 
+        String photoUri=findPhotoUri(values);
+        if(photoUri!=null){
+            ImageView photo=new ImageView(this);
+            photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            photo.setBackground(Ui.roundStroke(Ui.CARD,Ui.BORDER,1,12,this));
+            photo.setClipToOutline(true);
+            try{
+                photo.setImageURI(Uri.parse(photoUri));
+            }catch(Exception ignored){
+                photo.setImageDrawable(null);
+            }
+            row.addView(photo,new LinearLayout.LayoutParams(Ui.dp(this,72),Ui.dp(this,72)));
+            row.addView(Ui.hSpacer(this,10));
+        }
+
         LinearLayout textBox=new LinearLayout(this);
         textBox.setOrientation(LinearLayout.VERTICAL);
-        textBox.addView(Ui.text(this,"В наличии",12,Ui.MUTED,true));
+        textBox.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+
+        TextView stockLabel=Ui.text(this,"В наличии",12,Ui.MUTED,true);
+        stockLabel.setGravity(Gravity.END);
+        textBox.addView(stockLabel);
+
         TextView amount=Ui.text(this,Stock.display(r.quantity,template.quantityUnit),22,Ui.PRIMARY_DARK,true);
+        amount.setGravity(Gravity.END);
         textBox.addView(amount);
+
         row.addView(textBox,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
+        row.addView(Ui.hSpacer(this,10));
 
         android.widget.Button minus=Ui.dangerButton(this,"−");
         android.widget.Button plus=Ui.primaryButton(this,"＋");
         minus.setTextSize(22);
         plus.setTextSize(20);
-        row.addView(minus,new LinearLayout.LayoutParams(Ui.dp(this,56),Ui.dp(this,48)));
+        row.addView(minus,new LinearLayout.LayoutParams(Ui.dp(this,56),Ui.dp(this,52)));
         row.addView(Ui.hSpacer(this,6));
-        row.addView(plus,new LinearLayout.LayoutParams(Ui.dp(this,56),Ui.dp(this,48)));
+        row.addView(plus,new LinearLayout.LayoutParams(Ui.dp(this,56),Ui.dp(this,52)));
 
         stock.addView(row);
-        TextView hint=Ui.text(this,"− списать проданное   •   + добавить поступление",11,Ui.MUTED,false);
-        hint.setGravity(Gravity.START);
-        hint.setPadding(0,Ui.dp(this,7),0,0);
-        stock.addView(hint);
 
         minus.setOnClickListener(v->Stock.showAdjustDialog(this,db,r.id,template,false,this::refresh));
         plus.setOnClickListener(v->Stock.showAdjustDialog(this,db,r.id,template,true,this::refresh));
         parent.addView(stock);
+    }
+
+    private String findPhotoUri(Map<Long,String> values){
+        for(FieldDef f:fields){
+            if(!FieldDef.PHOTO.equals(f.type)) continue;
+            String uri=values.get(f.id);
+            if(uri!=null && !uri.trim().isEmpty()) return uri.trim();
+        }
+        return null;
     }
 
     private void createRecord(){
