@@ -36,8 +36,8 @@ public class FieldsActivity extends Activity {
         android.widget.Button back = Ui.button(this, "← " + template.name);
         back.setOnClickListener(v -> finish());
         root.addView(back, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 44)));
-        root.addView(Ui.title(this, "Поля карточки"));
-        root.addView(Ui.subtitle(this, "Порядок полей здесь станет порядком ввода в карточке. Удаление безопасное: поле сначала архивируется, данные не стираются."));
+        root.addView(Ui.title(this, "Поля товара"));
+        root.addView(Ui.subtitle(this, "Порядок полей здесь станет порядком ввода в товаре. Удаление безопасное: поле сначала архивируется, данные не стираются."));
 
         LinearLayout actions = Ui.row(this);
         android.widget.Button add = Ui.primaryButton(this, "＋ Добавить поле");
@@ -119,7 +119,7 @@ public class FieldsActivity extends Activity {
                 .setItems(names, (d,which) -> {
                     FieldDef f = archived.get(which);
                     new AlertDialog.Builder(this).setTitle(f.name)
-                            .setMessage("Вернуть поле в карточку?")
+                            .setMessage("Вернуть поле в товар?")
                             .setPositiveButton("Вернуть", (d2,w) -> { db.setFieldArchived(f.id, false); refresh(); })
                             .setNegativeButton("Отмена", null).show();
                 }).setNegativeButton("Закрыть", null).show();
