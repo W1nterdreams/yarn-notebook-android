@@ -4,6 +4,10 @@ public class YarnRecord {
     public long id;
     public long layoutId;
     public boolean saved;
+    public long internalNumber;
+    public boolean archived;
+    public long archivedAt;
+    public String photoFile = "";
     public String country = "";
     public String manufacturer = "";
     public String name = "";
