@@ -40,6 +40,19 @@ public class DbHelper extends SQLiteOpenHelper {
         if (oldVersion < 2) {
             db.execSQL("ALTER TABLE templates ADD COLUMN quantity_unit TEXT NOT NULL DEFAULT 'шт.'");
             db.execSQL("ALTER TABLE records ADD COLUMN quantity REAL NOT NULL DEFAULT 0");
+
+            // Старое пользовательское поле «Количество» становится системным остатком.
+            // Само поле не удаляем: архивируем, чтобы данные не терялись.
+            db.execSQL("UPDATE templates SET quantity_unit = COALESCE((" +
+                    "SELECT NULLIF(f.unit,'') FROM fields f " +
+                    "WHERE f.template_id=templates.id AND f.name='Количество' LIMIT 1" +
+                    "), quantity_unit)");
+            db.execSQL("UPDATE records SET quantity = COALESCE((" +
+                    "SELECT CAST(REPLACE(fv.value, ',', '.') AS REAL) " +
+                    "FROM field_values fv JOIN fields f ON f.id=fv.field_id " +
+                    "WHERE fv.record_id=records.id AND f.name='Количество' LIMIT 1" +
+                    "), quantity)");
+            db.execSQL("UPDATE fields SET archived=1 WHERE name='Количество'");
         }
     }
 
