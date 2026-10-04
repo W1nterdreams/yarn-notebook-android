@@ -18,10 +18,12 @@ import java.util.Locale;
 
 public class DbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "yarn_notebook.db";
-    private static final int DB_VERSION = 3;
+    private static final int DB_VERSION = 4;
+    private final Context appContext;
 
     public DbHelper(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
+        appContext = context.getApplicationContext();
     }
 
     @Override
@@ -36,6 +38,10 @@ public class DbHelper extends SQLiteOpenHelper {
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "layout_id INTEGER NOT NULL," +
                 "is_saved INTEGER NOT NULL DEFAULT 1," +
+                "internal_number INTEGER NOT NULL DEFAULT 0," +
+                "archived INTEGER NOT NULL DEFAULT 0," +
+                "archived_at INTEGER NOT NULL DEFAULT 0," +
+                "photo_file TEXT NOT NULL DEFAULT ''," +
                 "country TEXT NOT NULL DEFAULT ''," +
                 "manufacturer TEXT NOT NULL DEFAULT ''," +
                 "name TEXT NOT NULL DEFAULT ''," +
@@ -53,6 +59,8 @@ public class DbHelper extends SQLiteOpenHelper {
                 "FOREIGN KEY(layout_id) REFERENCES layouts(id) ON DELETE CASCADE)");
         db.execSQL("CREATE INDEX idx_yarns_layout ON yarns(layout_id)");
         db.execSQL("CREATE INDEX idx_yarns_name ON yarns(name)");
+        db.execSQL("CREATE UNIQUE INDEX idx_yarns_internal_number ON yarns(internal_number) WHERE internal_number>0");
+        db.execSQL("CREATE INDEX idx_yarns_archived ON yarns(archived,archived_at)");
     }
 
     @Override
@@ -64,6 +72,24 @@ public class DbHelper extends SQLiteOpenHelper {
         }
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE layouts ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE yarns ADD COLUMN internal_number INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE yarns ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE yarns ADD COLUMN archived_at INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE yarns ADD COLUMN photo_file TEXT NOT NULL DEFAULT ''");
+
+            Cursor c = db.rawQuery("SELECT id FROM yarns ORDER BY id ASC", null);
+            long number = 1;
+            while (c.moveToNext()) {
+                ContentValues values = new ContentValues();
+                values.put("internal_number", number++);
+                db.update("yarns", values, "id=?", new String[]{String.valueOf(c.getLong(0))});
+            }
+            c.close();
+
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_yarns_internal_number ON yarns(internal_number) WHERE internal_number>0");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_yarns_archived ON yarns(archived,archived_at)");
         }
     }
 
@@ -120,7 +146,7 @@ public class DbHelper extends SQLiteOpenHelper {
         List<LayoutRecord> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
                 "SELECT l.id,l.date_iso,l.description,COUNT(y.id),COALESCE(SUM(CASE WHEN y.is_saved=0 THEN 1 ELSE 0 END),0) " +
-                        "FROM layouts l LEFT JOIN yarns y ON y.layout_id=l.id " +
+                        "FROM layouts l LEFT JOIN yarns y ON y.layout_id=l.id AND y.archived=0 " +
                         "GROUP BY l.id,l.date_iso,l.description ORDER BY l.date_iso DESC", null);
         while (c.moveToNext()) {
             LayoutRecord r = new LayoutRecord();
@@ -136,14 +162,15 @@ public class DbHelper extends SQLiteOpenHelper {
     }
 
     private String yarnSelect() {
-        return "SELECT y.id,y.layout_id,y.is_saved,y.country,y.manufacturer,y.name,y.color,y.shade,y.composition," +
+        return "SELECT y.id,y.layout_id,y.is_saved,y.internal_number,y.archived,y.archived_at,y.photo_file," +
+                "y.country,y.manufacturer,y.name,y.color,y.shade,y.composition," +
                 "y.length_per_100,y.thread_params,y.availability,y.price_per_100,y.storage_location,y.description,l.date_iso ";
     }
 
     public List<YarnRecord> getYarnsForLayout(long layoutId, String query) {
         List<YarnRecord> out = new ArrayList<>();
         String q = query == null ? "" : query.trim();
-        String where = "WHERE y.layout_id=?";
+        String where = "WHERE y.layout_id=? AND y.archived=0";
         List<String> args = new ArrayList<>();
         args.add(String.valueOf(layoutId));
         if (!q.isEmpty()) {
@@ -167,8 +194,8 @@ public class DbHelper extends SQLiteOpenHelper {
         String[] args = new String[12];
         for (int i = 0; i < args.length; i++) args[i] = like;
         Cursor c = getReadableDatabase().rawQuery(
-                yarnSelect() + "FROM yarns y JOIN layouts l ON l.id=y.layout_id WHERE " +
-                        "y.country LIKE ? OR y.manufacturer LIKE ? OR y.name LIKE ? OR y.color LIKE ? OR y.shade LIKE ? OR y.composition LIKE ? OR y.length_per_100 LIKE ? OR y.thread_params LIKE ? OR y.availability LIKE ? OR y.price_per_100 LIKE ? OR y.storage_location LIKE ? OR y.description LIKE ? " +
+                yarnSelect() + "FROM yarns y JOIN layouts l ON l.id=y.layout_id WHERE y.archived=0 AND (" +
+                        "y.country LIKE ? OR y.manufacturer LIKE ? OR y.name LIKE ? OR y.color LIKE ? OR y.shade LIKE ? OR y.composition LIKE ? OR y.length_per_100 LIKE ? OR y.thread_params LIKE ? OR y.availability LIKE ? OR y.price_per_100 LIKE ? OR y.storage_location LIKE ? OR y.description LIKE ?) " +
                         "ORDER BY l.date_iso DESC,y.id DESC",
                 args);
         while (c.moveToNext()) out.add(readYarn(c));
@@ -179,7 +206,7 @@ public class DbHelper extends SQLiteOpenHelper {
     public List<YarnRecord> searchAdvanced(String manufacturer, String name, String color, String shade, String material) {
         List<YarnRecord> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
-                yarnSelect() + "FROM yarns y JOIN layouts l ON l.id=y.layout_id ORDER BY l.date_iso DESC,y.id DESC", null);
+                yarnSelect() + "FROM yarns y JOIN layouts l ON l.id=y.layout_id WHERE y.archived=0 ORDER BY l.date_iso DESC,y.id DESC", null);
         while (c.moveToNext()) {
             YarnRecord r = readYarn(c);
             if (!containsIgnoreCase(r.manufacturer, manufacturer)) continue;
@@ -226,7 +253,7 @@ public class DbHelper extends SQLiteOpenHelper {
 
         LinkedHashMap<String, String> unique = new LinkedHashMap<>();
         if ("material".equals(field)) {
-            Cursor c = getReadableDatabase().rawQuery("SELECT composition FROM yarns WHERE TRIM(composition)<>''", null);
+            Cursor c = getReadableDatabase().rawQuery("SELECT composition FROM yarns WHERE archived=0 AND TRIM(composition)<>''", null);
             while (c.moveToNext()) {
                 for (String material : extractMaterials(c.getString(0))) {
                     String key = material.toLowerCase(Locale.ROOT);
@@ -238,7 +265,7 @@ public class DbHelper extends SQLiteOpenHelper {
             String column = suggestionColumn(field);
             if (column == null) return values;
             Cursor c = getReadableDatabase().rawQuery(
-                    "SELECT DISTINCT TRIM(" + column + ") FROM yarns WHERE TRIM(" + column + ")<>''", null);
+                    "SELECT DISTINCT TRIM(" + column + ") FROM yarns WHERE archived=0 AND TRIM(" + column + ")<>''", null);
             while (c.moveToNext()) {
                 String v = c.getString(0);
                 if (v == null || v.trim().isEmpty()) continue;
@@ -329,7 +356,7 @@ public class DbHelper extends SQLiteOpenHelper {
     private JSONObject backupRoot(String type) throws JSONException {
         JSONObject root = new JSONObject();
         root.put("format", "yarn-notebook");
-        root.put("version", 1);
+        root.put("version", 2);
         root.put("type", type);
         root.put("exported_at", System.currentTimeMillis());
         return root;
@@ -340,7 +367,7 @@ public class DbHelper extends SQLiteOpenHelper {
         layout.put("date", getLayoutDate(layoutId));
         layout.put("description", getLayoutDescription(layoutId));
         JSONArray yarns = new JSONArray();
-        List<YarnRecord> items = getYarnsForLayout(layoutId, "");
+        List<YarnRecord> items = getYarnsForLayoutForBackup(layoutId);
         for (int i = items.size() - 1; i >= 0; i--) yarns.put(yarnToJson(items.get(i)));
         layout.put("yarns", yarns);
         return layout;
@@ -349,6 +376,9 @@ public class DbHelper extends SQLiteOpenHelper {
     private JSONObject yarnToJson(YarnRecord r) throws JSONException {
         JSONObject o = new JSONObject();
         o.put("saved", r.saved);
+        o.put("internal_number", r.internalNumber);
+        o.put("archived", r.archived);
+        o.put("archived_at", r.archivedAt);
         o.put("country", n(r.country));
         o.put("manufacturer", n(r.manufacturer));
         o.put("name", n(r.name));
@@ -404,6 +434,10 @@ public class DbHelper extends SQLiteOpenHelper {
                     YarnRecord r = new YarnRecord();
                     r.layoutId = layoutId;
                     r.saved = y.optBoolean("saved", true);
+                    r.internalNumber = y.optLong("internal_number", 0);
+                    if (r.internalNumber > 0 && internalNumberExists(r.internalNumber)) r.internalNumber = 0;
+                    r.archived = y.optBoolean("archived", false);
+                    r.archivedAt = y.optLong("archived_at", 0);
                     r.country = y.optString("country", "");
                     r.manufacturer = y.optString("manufacturer", "");
                     r.name = y.optString("name", "");
@@ -441,24 +475,29 @@ public class DbHelper extends SQLiteOpenHelper {
         r.id = c.getLong(0);
         r.layoutId = c.getLong(1);
         r.saved = c.getInt(2) != 0;
-        r.country = c.getString(3);
-        r.manufacturer = c.getString(4);
-        r.name = c.getString(5);
-        r.color = c.getString(6);
-        r.shade = c.getString(7);
-        r.composition = c.getString(8);
-        r.lengthPer100 = c.getString(9);
-        r.threadParams = c.getString(10);
-        r.availability = c.getString(11);
-        r.pricePer100 = c.getString(12);
-        r.storageLocation = c.getString(13);
-        r.description = c.getString(14);
-        r.layoutDate = c.getString(15);
+        r.internalNumber = c.getLong(3);
+        r.archived = c.getInt(4) != 0;
+        r.archivedAt = c.getLong(5);
+        r.photoFile = c.getString(6) == null ? "" : c.getString(6);
+        r.country = c.getString(7);
+        r.manufacturer = c.getString(8);
+        r.name = c.getString(9);
+        r.color = c.getString(10);
+        r.shade = c.getString(11);
+        r.composition = c.getString(12);
+        r.lengthPer100 = c.getString(13);
+        r.threadParams = c.getString(14);
+        r.availability = c.getString(15);
+        r.pricePer100 = c.getString(16);
+        r.storageLocation = c.getString(17);
+        r.description = c.getString(18);
+        r.layoutDate = c.getString(19);
         return r;
     }
 
     public long saveYarn(YarnRecord r, boolean markSaved) {
         SQLiteDatabase db = getWritableDatabase();
+        if (r.id == 0 && r.internalNumber <= 0) r.internalNumber = nextInternalNumber();
         ContentValues v = valuesFor(r, markSaved);
         long now = System.currentTimeMillis();
         v.put("updated_at", now);
@@ -475,6 +514,10 @@ public class DbHelper extends SQLiteOpenHelper {
         ContentValues v = new ContentValues();
         v.put("layout_id", r.layoutId);
         v.put("is_saved", saved ? 1 : 0);
+        v.put("internal_number", r.internalNumber);
+        v.put("archived", r.archived ? 1 : 0);
+        v.put("archived_at", r.archivedAt);
+        v.put("photo_file", n(r.photoFile));
         v.put("country", n(r.country));
         v.put("manufacturer", n(r.manufacturer));
         v.put("name", n(r.name));
@@ -503,6 +546,10 @@ public class DbHelper extends SQLiteOpenHelper {
         YarnRecord source = getYarn(id);
         if (source == null) return 0;
         source.id = 0;
+        source.internalNumber = 0;
+        source.archived = false;
+        source.archivedAt = 0;
+        source.photoFile = "";
         return saveYarn(source, false);
     }
 
@@ -512,17 +559,125 @@ public class DbHelper extends SQLiteOpenHelper {
         List<YarnRecord> sourceItems = getYarnsForLayout(sourceLayoutId, "");
         for (YarnRecord source : sourceItems) {
             source.id = 0;
+            source.internalNumber = 0;
+            source.archived = false;
+            source.archivedAt = 0;
+            source.photoFile = "";
             source.layoutId = newLayoutId;
             saveYarn(source, false);
         }
         return newLayoutId;
     }
 
+    public long nextInternalNumber() {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT COALESCE(MAX(internal_number),0)+1 FROM yarns", null);
+        long next = 1;
+        if (c.moveToFirst()) next = Math.max(1, c.getLong(0));
+        c.close();
+        return next;
+    }
+
+    public boolean internalNumberExists(long number) {
+        if (number <= 0) return false;
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT 1 FROM yarns WHERE internal_number=? LIMIT 1",
+                new String[]{String.valueOf(number)});
+        boolean exists = c.moveToFirst();
+        c.close();
+        return exists;
+    }
+
+    public YarnRecord getYarnByInternalNumber(long number) {
+        Cursor c = getReadableDatabase().rawQuery(
+                yarnSelect() + "FROM yarns y JOIN layouts l ON l.id=y.layout_id WHERE y.internal_number=? LIMIT 1",
+                new String[]{String.valueOf(number)});
+        YarnRecord r = null;
+        if (c.moveToFirst()) r = readYarn(c);
+        c.close();
+        return r;
+    }
+
+    public void setPhotoFile(long id, String fileName) {
+        ContentValues values = new ContentValues();
+        values.put("photo_file", n(fileName));
+        values.put("updated_at", System.currentTimeMillis());
+        getWritableDatabase().update("yarns", values, "id=?", new String[]{String.valueOf(id)});
+    }
+
+    public boolean archiveYarn(long id) {
+        YarnRecord record = getYarn(id);
+        if (record == null || record.archived) return record != null;
+        if (!PhotoStore.moveToArchive(appContext, record)) return false;
+
+        ContentValues values = new ContentValues();
+        values.put("archived", 1);
+        values.put("archived_at", System.currentTimeMillis());
+        values.put("updated_at", System.currentTimeMillis());
+        getWritableDatabase().update("yarns", values, "id=?", new String[]{String.valueOf(id)});
+        return true;
+    }
+
+    public boolean restoreYarn(long id) {
+        YarnRecord record = getYarn(id);
+        if (record == null || !record.archived) return record != null;
+        if (!PhotoStore.moveToActive(appContext, record)) return false;
+
+        ContentValues values = new ContentValues();
+        values.put("archived", 0);
+        values.put("archived_at", 0);
+        values.put("updated_at", System.currentTimeMillis());
+        getWritableDatabase().update("yarns", values, "id=?", new String[]{String.valueOf(id)});
+        return true;
+    }
+
+    public int getArchivedCount() {
+        Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM yarns WHERE archived=1", null);
+        int count = 0;
+        if (c.moveToFirst()) count = c.getInt(0);
+        c.close();
+        return count;
+    }
+
+    public List<YarnRecord> searchArchive(String query) {
+        List<YarnRecord> out = new ArrayList<>();
+        String q = query == null ? "" : query.trim();
+        String where = "WHERE y.archived=1";
+        List<String> args = new ArrayList<>();
+        if (!q.isEmpty()) {
+            where += " AND (CAST(y.internal_number AS TEXT) LIKE ? OR y.country LIKE ? OR y.manufacturer LIKE ? OR y.name LIKE ? OR y.color LIKE ? OR y.shade LIKE ? OR y.composition LIKE ? OR y.storage_location LIKE ? OR y.description LIKE ?)";
+            String like = "%" + q.replace("#", "") + "%";
+            for (int i = 0; i < 9; i++) args.add(like);
+        }
+        Cursor c = getReadableDatabase().rawQuery(
+                yarnSelect() + "FROM yarns y JOIN layouts l ON l.id=y.layout_id " + where +
+                        " ORDER BY y.archived_at DESC,y.internal_number DESC",
+                args.toArray(new String[0]));
+        while (c.moveToNext()) out.add(readYarn(c));
+        c.close();
+        return out;
+    }
+
+    private List<YarnRecord> getYarnsForLayoutForBackup(long layoutId) {
+        List<YarnRecord> out = new ArrayList<>();
+        Cursor c = getReadableDatabase().rawQuery(
+                yarnSelect() + "FROM yarns y JOIN layouts l ON l.id=y.layout_id WHERE y.layout_id=? ORDER BY y.id DESC",
+                new String[]{String.valueOf(layoutId)});
+        while (c.moveToNext()) out.add(readYarn(c));
+        c.close();
+        return out;
+    }
+
     public void deleteYarn(long id) {
+        YarnRecord record = getYarn(id);
+        if (record != null) PhotoStore.deletePhoto(appContext, record);
         getWritableDatabase().delete("yarns", "id=?", new String[]{String.valueOf(id)});
     }
 
     public void deleteLayout(long id) {
+        for (YarnRecord record : getYarnsForLayoutForBackup(id)) {
+            PhotoStore.deletePhoto(appContext, record);
+        }
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
         try {
