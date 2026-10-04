@@ -7,6 +7,7 @@ import android.graphics.Matrix;
 import android.os.Build;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
@@ -150,10 +151,15 @@ public final class PhotoStore {
         if (to.exists() && !to.delete()) return false;
         if (from.renameTo(to)) return true;
 
-        try {
-            java.nio.file.Files.copy(from.toPath(), to.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        try (FileInputStream in = new FileInputStream(from);
+             FileOutputStream out = new FileOutputStream(to)) {
+            byte[] buffer = new byte[16 * 1024];
+            int read;
+            while ((read = in.read(buffer)) >= 0) out.write(buffer, 0, read);
+            out.flush();
             return from.delete();
         } catch (Exception ignored) {
+            if (to.exists()) to.delete();
             return false;
         }
     }
