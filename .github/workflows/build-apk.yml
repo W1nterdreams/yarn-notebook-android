@@ -37,6 +37,29 @@ jobs:
           VKID_CLIENT_SECRET: ${{ secrets.VKID_CLIENT_SECRET }}
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Generate Gradle Wrapper for local project
+        run: gradle --no-daemon wrapper --gradle-version 9.6.0
+
+      - name: Package clean local project
+        shell: bash
+        run: |
+          rm -rf local-package MoyaPryazhaTest-local-project.zip
+          mkdir -p local-package/MoyaPryazhaTest
+          cp -R app local-package/MoyaPryazhaTest/
+          cp -R gradle local-package/MoyaPryazhaTest/
+          cp build.gradle settings.gradle gradle.properties gradlew gradlew.bat local-package/MoyaPryazhaTest/
+          cp vkid.local.properties README_LOCAL.md BUILD_TEST_APK.bat local-package/MoyaPryazhaTest/
+          find local-package/MoyaPryazhaTest -type d \( -name build -o -name .gradle -o -name .idea -o -name .git -o -name .github \) -prune -exec rm -rf {} +
+          cd local-package
+          zip -r ../MoyaPryazhaTest-local-project.zip MoyaPryazhaTest
+
+      - name: Upload local project ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoyaPryazhaTest-local-project
+          path: MoyaPryazhaTest-local-project.zip
+          if-no-files-found: error
+
       - name: Verify APK certificate
         shell: bash
         run: keytool -printcert -jarfile app/build/outputs/apk/debug/app-debug.apk

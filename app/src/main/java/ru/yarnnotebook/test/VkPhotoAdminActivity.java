@@ -1,4 +1,4 @@
-package ru.yarnnotebook.app;
+package ru.yarnnotebook.test;
 
 import android.app.AlertDialog;
 import android.app.DownloadManager;

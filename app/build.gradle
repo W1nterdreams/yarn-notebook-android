@@ -2,13 +2,21 @@ plugins {
     id 'com.android.application'
 }
 
-def vkidClientSecret = System.getenv('VKID_CLIENT_SECRET')
-if (!vkidClientSecret) {
-    vkidClientSecret = project.findProperty('VKIDClientSecret') ?: 'NOT_CONFIGURED'
+def vkidProps = new Properties()
+def vkidPropsFile = rootProject.file('vkid.local.properties')
+if (vkidPropsFile.exists()) {
+    vkidPropsFile.withInputStream { vkidProps.load(it) }
+}
+
+def vkidClientSecret = vkidProps.getProperty('VKIDClientSecret')
+if (!vkidClientSecret) vkidClientSecret = System.getenv('VKID_CLIENT_SECRET')
+if (!vkidClientSecret) vkidClientSecret = project.findProperty('VKIDClientSecret')
+if (!vkidClientSecret || vkidClientSecret == 'PASTE_VK_PROTECTED_KEY_HERE') {
+    vkidClientSecret = 'NOT_CONFIGURED'
 }
 
 android {
-    namespace 'ru.yarnnotebook.app'
+    namespace 'ru.yarnnotebook.test'
     compileSdk 36
 
     defaultConfig {

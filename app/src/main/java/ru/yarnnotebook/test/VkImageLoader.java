@@ -1,4 +1,4 @@
-package ru.yarnnotebook.app;
+package ru.yarnnotebook.test;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
         maven { url = uri('https://nexus-external.vkteam.ru/repository/maven/') }
     }
 }
-rootProject.name = "YarnNotebook"
+rootProject.name = "MoyaPryazhaTest"
 include ':app'

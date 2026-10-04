@@ -1,4 +1,4 @@
-package ru.yarnnotebook.app;
+package ru.yarnnotebook.test;
 
 import com.vk.id.AccessToken;
 import com.vk.id.VKID;
