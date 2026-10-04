@@ -131,6 +131,7 @@ public class DbHelper extends SQLiteOpenHelper {
         if(raw==null||raw.isEmpty())return "";
         if(FieldDef.CHECKBOX.equals(f.type))return "1".equals(raw)?"Да":"Нет";
         if(FieldDef.MULTI_CHOICE.equals(f.type)){try{JSONArray a=new JSONArray(raw);List<String> vals=new ArrayList<>();for(int i=0;i<a.length();i++)vals.add(a.optString(i));return String.join(", ",vals);}catch(Exception ignored){return raw;}}
+        if(FieldDef.REPEAT_GROUP.equals(f.type)) return RepeatGroup.display(f.optionsJson, raw);
         if(FieldDef.PHOTO.equals(f.type))return raw.isEmpty()?"":"Фото выбрано";
         return raw+((f.unit==null||f.unit.isEmpty())?"":" "+f.unit);
     }
