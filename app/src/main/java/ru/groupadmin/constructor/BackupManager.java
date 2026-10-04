@@ -92,7 +92,7 @@ final class BackupManager {
         if (templates == null) return catalogId;
         for (int ti = 0; ti < templates.length(); ti++) {
             JSONObject jt = templates.getJSONObject(ti);
-            long templateId = db.createTemplate(catalogId, jt.optString("name", "Тип карточки"));
+            long templateId = db.createTemplate(catalogId, jt.optString("name", "Тип товара"));
             db.setOutputTemplate(templateId, jt.optString("output_template", ""));
             Map<Long, Long> fieldMap = new HashMap<>();
             JSONArray fields = jt.optJSONArray("fields");
