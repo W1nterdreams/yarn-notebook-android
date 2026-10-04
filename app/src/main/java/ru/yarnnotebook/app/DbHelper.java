@@ -582,30 +582,24 @@ public class DbHelper extends SQLiteOpenHelper {
 
     public synchronized long nextInternalNumber() {
         SQLiteDatabase db = getWritableDatabase();
-        db.beginTransaction();
-        try {
-            db.execSQL("CREATE TABLE IF NOT EXISTS app_meta (meta_key TEXT PRIMARY KEY, meta_value INTEGER NOT NULL)");
-            Cursor c = db.rawQuery(
-                    "SELECT meta_value FROM app_meta WHERE meta_key='next_internal_number' LIMIT 1", null);
-            long next;
-            if (c.moveToFirst()) {
-                next = Math.max(1, c.getLong(0));
-            } else {
-                Cursor max = db.rawQuery("SELECT COALESCE(MAX(internal_number),0)+1 FROM yarns", null);
-                next = max.moveToFirst() ? Math.max(1, max.getLong(0)) : 1;
-                max.close();
-            }
-            c.close();
-
-            ContentValues values = new ContentValues();
-            values.put("meta_key", "next_internal_number");
-            values.put("meta_value", next + 1);
-            db.insertWithOnConflict("app_meta", null, values, SQLiteDatabase.CONFLICT_REPLACE);
-            db.setTransactionSuccessful();
-            return next;
-        } finally {
-            db.endTransaction();
+        db.execSQL("CREATE TABLE IF NOT EXISTS app_meta (meta_key TEXT PRIMARY KEY, meta_value INTEGER NOT NULL)");
+        Cursor c = db.rawQuery(
+                "SELECT meta_value FROM app_meta WHERE meta_key='next_internal_number' LIMIT 1", null);
+        long next;
+        if (c.moveToFirst()) {
+            next = Math.max(1, c.getLong(0));
+        } else {
+            Cursor max = db.rawQuery("SELECT COALESCE(MAX(internal_number),0)+1 FROM yarns", null);
+            next = max.moveToFirst() ? Math.max(1, max.getLong(0)) : 1;
+            max.close();
         }
+        c.close();
+
+        ContentValues values = new ContentValues();
+        values.put("meta_key", "next_internal_number");
+        values.put("meta_value", next + 1);
+        db.insertWithOnConflict("app_meta", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+        return next;
     }
 
     private synchronized void ensureNextInternalNumberAtLeast(long requiredNext) {
