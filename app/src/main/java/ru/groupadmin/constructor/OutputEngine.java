@@ -16,6 +16,7 @@ final class OutputEngine {
 
         String out = pattern;
         for (FieldDef f : fields) {
+            if ("Количество".equals(f.name)) continue;
             String v = valuesByName.get(f.name);
             out = out.replace("{" + f.name + "}", v == null ? "" : v);
         }
