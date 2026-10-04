@@ -22,7 +22,7 @@ final class BackupManager {
 
         JSONObject root = new JSONObject();
         root.put("format", "group-admin-constructor");
-        root.put("version", 2);
+        root.put("version", 3);
         root.put("exported_at", System.currentTimeMillis());
         JSONObject jc = new JSONObject();
         jc.put("name", c.name);
@@ -32,6 +32,12 @@ final class BackupManager {
             jt.put("name", t.name);
             jt.put("output_template", t.outputTemplate == null ? "" : t.outputTemplate);
             jt.put("quantity_unit", t.quantityUnit == null ? "шт." : t.quantityUnit);
+            JSONArray cardFields = new JSONArray();
+            cardFields.put(t.cardField1);
+            cardFields.put(t.cardField2);
+            cardFields.put(t.cardField3);
+            cardFields.put(t.cardField4);
+            jt.put("card_fields", cardFields);
             JSONArray fields = new JSONArray();
             List<FieldDef> defs = db.getFields(t.id, true);
             for (FieldDef f : defs) {
@@ -118,6 +124,17 @@ final class BackupManager {
                     fieldMap.put(jf.optLong("old_id", -1), newId);
                 }
             }
+            JSONArray savedCardFields = jt.optJSONArray("card_fields");
+            if (savedCardFields != null) {
+                long[] mapped = new long[4];
+                for (int i = 0; i < 4; i++) {
+                    long oldId = i < savedCardFields.length() ? savedCardFields.optLong(i, 0) : 0;
+                    Long newId = fieldMap.get(oldId);
+                    mapped[i] = newId == null ? 0 : newId;
+                }
+                db.setCardFields(templateId, mapped[0], mapped[1], mapped[2], mapped[3]);
+            }
+
             JSONArray records = jt.optJSONArray("records");
             if (records != null) {
                 for (int ri = 0; ri < records.length(); ri++) {
