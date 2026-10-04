@@ -251,6 +251,10 @@ public class FieldEditActivity extends Activity {
         String n=name.getText().toString().trim();
         if(n.isEmpty()){toast("Введите название поля");return;}
         if(n.contains("{")||n.contains("}")){toast("В названии нельзя использовать { и }");return;}
+        if("Количество".equalsIgnoreCase(n) || "Единица учёта".equalsIgnoreCase(n)){
+            toast("Это системное поле уже встроено в каждый товар");
+            return;
+        }
         if(db.fieldNameExists(templateId,n,fieldId)){toast("Поле с таким названием уже есть");return;}
         String t=types[type.getSelectedItemPosition()];
         if(FieldDef.FORMULA.equals(t)&&formula.getText().toString().trim().isEmpty()){toast("Введите формулу");return;}
