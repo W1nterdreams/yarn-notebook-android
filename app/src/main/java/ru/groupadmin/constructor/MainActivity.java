@@ -72,7 +72,7 @@ public class MainActivity extends Activity {
             card.addView(Ui.text(this,c.name,19,Ui.TEXT,true));
             LinearLayout stats=Ui.row(this);
             stats.addView(Ui.badge(this,"Типов: "+db.countTemplates(c.id),Ui.PRIMARY_DARK,Ui.PRIMARY_SOFT));
-            stats.addView(Ui.spacer(this,6));
+            stats.addView(Ui.hSpacer(this,6));
             stats.addView(Ui.badge(this,"Товаров: "+db.countRecordsForCatalog(c.id),Ui.SUCCESS,Ui.SUCCESS_BG));
             card.addView(Ui.spacer(this,10));
             card.addView(stats);
