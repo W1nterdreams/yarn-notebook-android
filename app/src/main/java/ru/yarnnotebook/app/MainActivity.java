@@ -7,6 +7,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.graphics.Typeface;
@@ -14,6 +15,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
@@ -29,6 +31,7 @@ import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.DatePicker;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SearchView;
@@ -36,7 +39,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
+import androidx.core.content.FileProvider;
+
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -75,7 +81,15 @@ public class MainActivity extends Activity {
     private static final int REQ_EXPORT_JSON = 7001;
     private static final int REQ_IMPORT_DATABASE = 7002;
     private static final int REQ_IMPORT_LAYOUT = 7003;
+    private static final int REQ_CAMERA = 7004;
     private String pendingExportJson = "";
+    private File pendingCameraFile;
+    private long pendingCameraYarnId = 0;
+
+    private ImageView editorPhotoPreview;
+    private Button editorPhotoButton;
+    private Button editorDeletePhotoButton;
+    private TextView editorInternalArticle;
 
     private EditText fCountry, fManufacturer, fName, fColor, fShade, fLength,
             fThread, fAvailability, fPrice, fStorage, fDescription;
@@ -86,7 +100,7 @@ public class MainActivity extends Activity {
     private final List<LinearLayout> bobbinWeightRowViews = new ArrayList<>();
     private final List<TextView> bobbinWeightLabels = new ArrayList<>();
 
-    private enum Screen { HOME, LAYOUT, EDIT, GLOBAL_SEARCH }
+    private enum Screen { HOME, LAYOUT, EDIT, GLOBAL_SEARCH, ARCHIVE }
 
     private static class CompositionRow {
         LinearLayout root;
@@ -146,8 +160,8 @@ public class MainActivity extends Activity {
 
     private void navigateBack() {
         if (screen == Screen.EDIT) {
-            showLayout(currentLayoutId, "");
-        } else if (screen == Screen.LAYOUT || screen == Screen.GLOBAL_SEARCH) {
+            backFromEditor();
+        } else if (screen == Screen.LAYOUT || screen == Screen.GLOBAL_SEARCH || screen == Screen.ARCHIVE) {
             showHome();
         } else {
             long now = System.currentTimeMillis();
@@ -177,6 +191,12 @@ public class MainActivity extends Activity {
         searchParams.setMargins(dp(12), dp(8), dp(12), dp(6));
         page.addView(globalSearch, searchParams);
         globalSearch.setOnClickListener(v -> showGlobalSearch());
+
+        Button archive = button("Архив проданного · " + db.getArchivedCount());
+        LinearLayout.LayoutParams archiveParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+        archiveParams.setMargins(dp(12), 0, dp(12), dp(6));
+        page.addView(archive, archiveParams);
+        archive.setOnClickListener(v -> showArchive(""));
 
         ScrollView scroll = new ScrollView(this);
         final int restoreHomeScrollY = homeScrollY;
