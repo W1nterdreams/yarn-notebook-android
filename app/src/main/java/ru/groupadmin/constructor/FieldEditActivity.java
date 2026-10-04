@@ -42,14 +42,16 @@ public class FieldEditActivity extends Activity {
 
     private void render() {
         LinearLayout root = Ui.page(this);
-        android.widget.Button back = Ui.button(this, "← Поля");
+        android.widget.Button back = Ui.outlineButton(this, "← Поля");
         back.setOnClickListener(v -> finish());
         root.addView(back, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,44)));
         root.addView(Ui.title(this, original == null ? "Новое поле" : "Изменить поле"));
+        root.addView(Ui.subtitle(this,"Настройте, как это поле будет выглядеть при вводе товара и как его использовать в списке, поиске и формулах."));
 
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
 
+        form.addView(Ui.sectionTitle(this,"ОСНОВНОЕ"));
         name = input("Название поля", false);
         form.addView(label("Название"));
         form.addView(name);
@@ -59,6 +61,7 @@ public class FieldEditActivity extends Activity {
         String[] labels = new String[types.length];
         for(int i=0;i<types.length;i++) labels[i]=FieldDef.humanType(types[i]);
         type.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels));
+        type.setBackground(Ui.inputBackground(this));
         form.addView(label("Тип ввода"));
         form.addView(type, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,52)));
 
@@ -75,6 +78,8 @@ public class FieldEditActivity extends Activity {
         defaultBox.addView(label("Значение по умолчанию"));
         defaultBox.addView(def);
         form.addView(defaultBox);
+
+        form.addView(Ui.sectionTitle(this,"ПОВЕДЕНИЕ ПОЛЯ"));
 
         required = new CheckBox(this);
         required.setText("Обязательное поле");
@@ -93,6 +98,8 @@ public class FieldEditActivity extends Activity {
         searchable.setChecked(true);
         form.addView(searchable);
 
+        form.addView(Ui.sectionTitle(this,"НАСТРОЙКА ТИПА"));
+
         optionsBox = new LinearLayout(this);
         optionsBox.setOrientation(LinearLayout.VERTICAL);
         optionsBox.addView(label("Варианты выбора — по одному в строке"));
@@ -104,13 +111,15 @@ public class FieldEditActivity extends Activity {
         repeatBox = new LinearLayout(this);
         repeatBox.setOrientation(LinearLayout.VERTICAL);
         repeatBox.addView(label("Подполя повторяемой группы"));
-        repeatBox.addView(Ui.text(this,
-                "Подходит для состава, комплектации и любых наборов, где у одного товара может быть несколько строк. Например: «Материал + %» и кнопка «Добавить строку».",
-                13, Ui.MUTED, false));
+        LinearLayout repeatHint = Ui.infoCard(this, Ui.PRIMARY_SOFT, Ui.BORDER);
+        repeatHint.addView(Ui.text(this,
+                "Повторяемая группа подходит для состава, комплектации и любых наборов, где у одного товара может быть несколько строк. Например: «Материал + %».",
+                13, Ui.PRIMARY_DARK, false));
+        repeatBox.addView(repeatHint);
         repeatList = new LinearLayout(this);
         repeatList.setOrientation(LinearLayout.VERTICAL);
         repeatBox.addView(repeatList);
-        android.widget.Button addSub = Ui.button(this, "＋ Добавить подполе");
+        android.widget.Button addSub = Ui.outlineButton(this, "＋ Добавить подполе");
         repeatBox.addView(addSub, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this,48)));
         addSub.setOnClickListener(v -> addGroupSubfield("", FieldDef.TEXT, ""));
         form.addView(repeatBox);
@@ -152,7 +161,7 @@ public class FieldEditActivity extends Activity {
         e.setHint(hint);
         e.setTextColor(Ui.TEXT);
         e.setHintTextColor(Ui.MUTED);
-        e.setBackgroundColor(android.graphics.Color.WHITE);
+        e.setBackground(Ui.inputBackground(this));
         e.setPadding(Ui.dp(this,12),Ui.dp(this,10),Ui.dp(this,12),Ui.dp(this,10));
         if(!multi)e.setSingleLine(true);
         return e;
@@ -220,6 +229,7 @@ public class FieldEditActivity extends Activity {
         String[] labels = new String[RepeatGroup.SUB_TYPES.length];
         for(int i=0;i<labels.length;i++) labels[i]=FieldDef.humanType(RepeatGroup.SUB_TYPES[i]);
         ed.type.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels));
+        ed.type.setBackground(Ui.inputBackground(this));
         for(int i=0;i<RepeatGroup.SUB_TYPES.length;i++) if(RepeatGroup.SUB_TYPES[i].equals(initialType)) { ed.type.setSelection(i); break; }
 
         ed.unit = input("Ед. изм.", false);
@@ -229,7 +239,7 @@ public class FieldEditActivity extends Activity {
         row.addView(ed.unit,new LinearLayout.LayoutParams(0,Ui.dp(this,50),1f));
         card.addView(row);
 
-        android.widget.Button remove=Ui.button(this,"Удалить подполе");
+        android.widget.Button remove=Ui.dangerButton(this,"Удалить подполе");
         remove.setOnClickListener(v->{groupEditors.remove(ed);repeatList.removeView(card);});
         card.addView(remove,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,42)));
 
