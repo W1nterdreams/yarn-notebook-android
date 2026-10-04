@@ -1,6 +1,7 @@
 package ru.groupadmin.constructor;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
@@ -189,8 +190,14 @@ public class FieldEditActivity extends Activity {
         formula.setMinLines(3);
         formulaBox.addView(formula);
         formulaBox.addView(Ui.text(this,
-                "Ссылки на поля пишутся в фигурных скобках. Доступны + − × / % ^, скобки и функции ROUND, MIN, MAX, ABS, CEIL, FLOOR, IF. Аргументы функций разделяются точкой с запятой. Пример: =IF({Количество}>0;{Цена}*{Количество};0)",
+                "Можно использовать поля в {фигурных скобках}, арифметику, сравнения и функции.",
                 13,Ui.MUTED,false));
+        android.widget.Button formulaHelp=Ui.outlineButton(this,"?  Помощь по формулам");
+        formulaHelp.setOnClickListener(v->showFormulaHelp());
+        LinearLayout.LayoutParams helpLp=new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,44));
+        helpLp.setMargins(0,Ui.dp(this,8),0,0);
+        formulaBox.addView(formulaHelp,helpLp);
         form.addView(formulaBox);
 
         android.widget.Button save=Ui.primaryButton(this,"Сохранить поле");
@@ -321,6 +328,50 @@ public class FieldEditActivity extends Activity {
 
         groupEditors.add(ed);
         repeatList.addView(card);
+    }
+
+    private void showFormulaHelp(){
+        String message =
+                "Формула должна возвращать число. Начинать её можно со знака =.\n\n" +
+                "ПОЛЯ\n" +
+                "Любое числовое поле: {Цена}, {Вес}, {Скидка}.\n" +
+                "Системный остаток товара: {Количество}.\n" +
+                "Пустое или нечисловое значение в расчёте считается 0.\n\n" +
+                "ОПЕРАТОРЫ\n" +
+                "+   сложение\n" +
+                "−   вычитание\n" +
+                "*   умножение\n" +
+                "/   деление\n" +
+                "%   остаток от деления\n" +
+                "^   степень\n" +
+                "( ) скобки\n\n" +
+                "СРАВНЕНИЯ\n" +
+                ">   <   >=   <=   ==   !=\n" +
+                "Истина даёт 1, ложь — 0. Обычно сравнения используются внутри IF.\n\n" +
+                "ФУНКЦИИ\n" +
+                "ROUND(x) — округлить до целого\n" +
+                "ROUND(x;2) — округлить до 2 знаков\n" +
+                "MIN(a;b;...) — минимальное значение\n" +
+                "MAX(a;b;...) — максимальное значение\n" +
+                "ABS(x) — модуль числа\n" +
+                "CEIL(x) — округлить вверх\n" +
+                "FLOOR(x) — округлить вниз\n" +
+                "IF(условие;если да;если нет)\n\n" +
+                "ПРИМЕРЫ\n" +
+                "={Цена}*{Количество}\n" +
+                "=ROUND({Цена}*(100-{Скидка})/100;0)\n" +
+                "=IF({Количество}>0;{Цена}*{Количество};0)\n" +
+                "=MAX({Закупка}*1.2;{Минимальная цена})\n" +
+                "=CEIL({Вес}/100)*100\n\n" +
+                "Дробные числа можно вводить через точку или запятую. " +
+                "Аргументы функций разделяются точкой с запятой. " +
+                "Текстовые операции и склеивание строк сейчас не поддерживаются.";
+
+        new AlertDialog.Builder(this)
+                .setTitle("Помощь по формулам")
+                .setMessage(message)
+                .setPositiveButton("Понятно",null)
+                .show();
     }
 
     private void save(){
