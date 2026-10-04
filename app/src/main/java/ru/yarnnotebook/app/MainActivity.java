@@ -1039,6 +1039,90 @@ public class MainActivity extends Activity {
         setContentView(page);
     }
 
+    private void startCameraForEditor(YarnRecord existing) {
+        YarnRecord current = collect(existing);
+        if (current.id == 0 || current.internalNumber <= 0) {
+            db.saveYarn(current, false);
+            currentYarnId = current.id;
+            updateEditorPhotoViews(db.getYarn(current.id));
+        } else {
+            currentYarnId = current.id;
+        }
+
+        try {
+            pendingCameraFile = PhotoStore.newCameraTempFile(this);
+            pendingCameraYarnId = currentYarnId;
+            Uri uri = FileProvider.getUriForFile(
+                    this,
+                    getPackageName() + ".fileprovider",
+                    pendingCameraFile);
+
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, uri);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            intent.setClipData(ClipData.newRawUri("Фото товара", uri));
+
+            if (intent.resolveActivity(getPackageManager()) == null) {
+                pendingCameraFile.delete();
+                pendingCameraFile = null;
+                pendingCameraYarnId = 0;
+                Toast.makeText(this, "Приложение камеры не найдено", Toast.LENGTH_LONG).show();
+                return;
+            }
+            startActivityForResult(intent, REQ_CAMERA);
+        } catch (Exception e) {
+            pendingCameraFile = null;
+            pendingCameraYarnId = 0;
+            Toast.makeText(this, "Не удалось открыть камеру: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void removeCurrentPhoto(YarnRecord existing) {
+        YarnRecord record = currentYarnId > 0 ? db.getYarn(currentYarnId) : existing;
+        if (record == null || !PhotoStore.exists(this, record)) return;
+
+        new AlertDialog.Builder(this)
+                .setTitle("Удалить фотографию?")
+                .setMessage("Карточка товара останется, будет удалено только локальное фото.")
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Удалить", (d, w) -> {
+                    PhotoStore.deletePhoto(this, record);
+                    db.setPhotoFile(record.id, "");
+                    record.photoFile = "";
+                    updateEditorPhotoViews(record);
+                })
+                .show();
+    }
+
+    private void updateEditorPhotoViews(YarnRecord record) {
+        YarnRecord current = record;
+        if (current == null && currentYarnId > 0) current = db.getYarn(currentYarnId);
+
+        if (editorInternalArticle != null) {
+            if (current != null && current.internalNumber > 0) {
+                editorInternalArticle.setText("Внутренний артикул: #" + current.internalNumber);
+            } else {
+                editorInternalArticle.setText("Внутренний артикул будет присвоен при сохранении");
+            }
+        }
+
+        boolean hasPhoto = current != null && PhotoStore.exists(this, current);
+        if (editorPhotoPreview != null) {
+            if (hasPhoto) {
+                Bitmap bitmap = PhotoStore.loadThumbnail(this, current, dp(900));
+                editorPhotoPreview.setImageBitmap(bitmap);
+                editorPhotoPreview.setVisibility(View.VISIBLE);
+            } else {
+                editorPhotoPreview.setImageDrawable(null);
+                editorPhotoPreview.setVisibility(View.GONE);
+            }
+        }
+        if (editorPhotoButton != null) editorPhotoButton.setText(hasPhoto ? "Заменить фото" : "Снять фото");
+        if (editorDeletePhotoButton != null) {
+            editorDeletePhotoButton.setVisibility(hasPhoto ? View.VISIBLE : View.GONE);
+        }
+    }
+
     private void addCompositionEditor(LinearLayout parent, String composition) {
         compositionRows.clear();
 
