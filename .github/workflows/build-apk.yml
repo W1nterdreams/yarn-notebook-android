@@ -33,6 +33,8 @@ jobs:
           gradle-version: '9.6.0'
 
       - name: Build debug APK
+        env:
+          VKID_CLIENT_SECRET: ${{ secrets.VKID_CLIENT_SECRET }}
         run: gradle --no-daemon :app:assembleDebug
 
       - name: Verify APK certificate
@@ -42,6 +44,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: moya-pryazha-test-v0.1.3-debug-apk
+          name: moya-pryazha-test-v0.1.4-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

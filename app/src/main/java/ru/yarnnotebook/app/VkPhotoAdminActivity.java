@@ -30,19 +30,22 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.ComponentActivity;
-import androidx.activity.result.ActivityResultLauncher;
-
-import com.vk.api.sdk.VK;
-import com.vk.api.sdk.auth.VKAuthenticationResult;
-import com.vk.api.sdk.auth.VKScope;
+import com.vk.id.AccessToken;
+import com.vk.id.VKID;
+import com.vk.id.VKIDAuthFail;
+import com.vk.id.auth.AuthCodeData;
+import com.vk.id.auth.VKIDAuthCallback;
+import com.vk.id.auth.VKIDAuthParams;
+import com.vk.id.logout.VKIDLogoutCallback;
+import com.vk.id.logout.VKIDLogoutFail;
+import com.vk.id.logout.VKIDLogoutParams;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -58,7 +61,6 @@ public class VkPhotoAdminActivity extends ComponentActivity {
     private final int BORDER = Color.rgb(222, 214, 209);
     private final int DANGER = Color.rgb(166, 58, 48);
 
-    private ActivityResultLauncher<Collection<VKScope>> authLauncher;
     private boolean vkSdkReady = false;
     private String vkSdkError = "";
     private int groupId;
@@ -79,26 +81,40 @@ public class VkPhotoAdminActivity extends ComponentActivity {
         showStart();
     }
 
+    private final VKIDAuthCallback vkAuthCallback = new VKIDAuthCallback() {
+        @Override public void onAuth(AccessToken accessToken) {
+            Toast.makeText(VkPhotoAdminActivity.this, "Авторизация VK ID выполнена", Toast.LENGTH_SHORT).show();
+            showStart();
+        }
+
+        @Override public void onAuthCode(AuthCodeData data, boolean isCompletion) {
+            // VK ID SDK сам завершит обмен кода на токен.
+        }
+
+        @Override public void onFail(VKIDAuthFail fail) {
+            showError("Авторизация VK ID", new Exception(fail.getDescription()));
+        }
+    };
+
     private void initVkSdk() {
-        int appId = getResources().getInteger(R.integer.com_vk_sdk_AppId);
-        if (appId <= 0) {
+        if (!BuildConfig.VKID_SECRET_CONFIGURED) {
             vkSdkReady = false;
-            vkSdkError = "";
+            vkSdkError = "Для сборки не задан защищённый ключ VK ID.";
             return;
         }
         try {
-            VK.initialize(getApplicationContext());
+            VKID.Companion.init(getApplicationContext());
             vkSdkReady = true;
             vkSdkError = "";
-            authLauncher = VK.login(this, result -> {
-                if (result instanceof VKAuthenticationResult.Success) {
-                    Toast.makeText(this, "Авторизация VK выполнена", Toast.LENGTH_SHORT).show();
-                    showStart();
-                } else if (result instanceof VKAuthenticationResult.Failed) {
-                    Exception e = ((VKAuthenticationResult.Failed) result).getException();
-                    showError("Авторизация VK", e);
-                }
-            });
+        } catch (IllegalStateException alreadyInitialized) {
+            try {
+                VKID.Companion.getInstance();
+                vkSdkReady = true;
+                vkSdkError = "";
+            } catch (Exception e) {
+                vkSdkReady = false;
+                vkSdkError = shortError(e);
+            }
         } catch (Exception e) {
             vkSdkReady = false;
             vkSdkError = shortError(e);
@@ -108,11 +124,44 @@ public class VkPhotoAdminActivity extends ComponentActivity {
     private boolean isVkLoggedIn() {
         if (!vkSdkReady) return false;
         try {
-            return VK.isLoggedIn();
+            return VKID.Companion.getInstance().getAccessToken() != null;
         } catch (Exception e) {
             vkSdkReady = false;
             vkSdkError = shortError(e);
             return false;
+        }
+    }
+
+    private void startVkLogin() {
+        if (!vkSdkReady) {
+            toast("VK ID SDK не инициализирован");
+            return;
+        }
+        try {
+            VKIDAuthParams.Builder builder = new VKIDAuthParams.Builder();
+            builder.setScopes(Collections.singleton("photos"));
+            VKID.Companion.getInstance().authorize(this, vkAuthCallback, builder.build());
+        } catch (Exception e) {
+            showError("Авторизация VK ID", e);
+        }
+    }
+
+    private void logoutVk() {
+        if (!vkSdkReady) return;
+        try {
+            VKIDLogoutParams params = new VKIDLogoutParams.Builder().build();
+            VKID.Companion.getInstance().logout(new VKIDLogoutCallback() {
+                @Override public void onSuccess() {
+                    Toast.makeText(VkPhotoAdminActivity.this, "Выход из VK выполнен", Toast.LENGTH_SHORT).show();
+                    showStart();
+                }
+
+                @Override public void onFail(VKIDLogoutFail fail) {
+                    showError("Выход из VK ID", new Exception(fail.getDescription()));
+                }
+            }, this, params);
+        } catch (Exception e) {
+            showError("Выход из VK ID", e);
         }
     }
 
@@ -127,51 +176,40 @@ public class VkPhotoAdminActivity extends ComponentActivity {
         LinearLayout page = page();
         page.addView(toolbar("Моя пряжа Test · Фото VK", v -> finish()));
 
-        int appId = getResources().getInteger(R.integer.com_vk_sdk_AppId);
-        TextView mode = text(appId > 0
-                ? (vkSdkReady
-                    ? (isVkLoggedIn() ? "VK: авторизовано" : "VK: требуется вход")
-                    : "VK: ошибка инициализации")
-                : "VK: app_id пока не задан", 15, appId > 0 && isVkLoggedIn() ? TEXT : DANGER, true);
+        TextView mode = text(vkSdkReady
+                ? (isVkLoggedIn() ? "VK ID: авторизовано" : "VK ID: требуется вход")
+                : "VK ID: требуется настройка",
+                15, vkSdkReady && isVkLoggedIn() ? TEXT : DANGER, true);
         mode.setPadding(dp(16), dp(14), dp(16), dp(4));
         page.addView(mode);
 
         TextView note = text(
-                "Тестовая Standalone-версия. Здесь нет белого списка групп и альбомов: укажите ID любой тестовой группы, которой вы управляете.",
+                "Тестовая версия на актуальном VK ID SDK 2.7.3 · App ID 54803965. Запрашивается только доступ photos.",
                 14, MUTED, false);
         note.setPadding(dp(16), dp(4), dp(16), dp(10));
         page.addView(note);
 
-        if (appId == 0) {
+        if (!BuildConfig.VKID_SECRET_CONFIGURED) {
             TextView setup = text(
-                    "Нужен app_id нового Standalone-приложения VK. После его добавления вход будет выполняться официальным VK SDK.",
+                    "В этой APK не задан защищённый ключ VK ID. Добавьте его в GitHub Actions Secret VKID_CLIENT_SECRET и пересоберите тестовую ветку.",
                     15, TEXT, false);
             setup.setPadding(dp(16), dp(10), dp(16), dp(12));
             page.addView(setup);
         } else if (!vkSdkReady) {
             TextView setup = text(
-                    "VK SDK не удалось инициализировать." + (blank(vkSdkError) ? "" : "\n" + vkSdkError),
+                    "VK ID SDK не удалось инициализировать." + (blank(vkSdkError) ? "" : "\n" + vkSdkError),
                     15, TEXT, false);
             setup.setPadding(dp(16), dp(10), dp(16), dp(12));
             page.addView(setup);
         } else {
-            Button auth = primaryButton(isVkLoggedIn() ? "Переподключить VK" : "Войти через VK");
+            Button auth = primaryButton(isVkLoggedIn() ? "Переподключить VK ID" : "Войти через VK ID");
             addButton(page, auth);
-            auth.setOnClickListener(v -> {
-                if (authLauncher != null) {
-                    authLauncher.launch(Arrays.asList(VKScope.PHOTOS));
-                } else {
-                    toast("Авторизация VK пока недоступна");
-                }
-            });
+            auth.setOnClickListener(v -> startVkLogin());
 
             if (isVkLoggedIn()) {
-                Button logout = button("Выйти из VK в тестовом приложении");
+                Button logout = button("Выйти из VK ID в тестовом приложении");
                 addButton(page, logout);
-                logout.setOnClickListener(v -> {
-                    if (vkSdkReady) VK.logout();
-                    showStart();
-                });
+                logout.setOnClickListener(v -> logoutVk());
             }
         }
 
@@ -234,16 +272,12 @@ public class VkPhotoAdminActivity extends ComponentActivity {
     }
 
     private boolean requireLoggedIn() {
-        if (getResources().getInteger(R.integer.com_vk_sdk_AppId) <= 0) {
-            toast("Сначала нужно добавить app_id Standalone-приложения");
-            return false;
-        }
         if (!vkSdkReady) {
-            toast("VK SDK не инициализирован");
+            toast("VK ID SDK не настроен");
             return false;
         }
         if (!isVkLoggedIn()) {
-            toast("Сначала войдите через VK");
+            toast("Сначала войдите через VK ID");
             return false;
         }
         return true;
