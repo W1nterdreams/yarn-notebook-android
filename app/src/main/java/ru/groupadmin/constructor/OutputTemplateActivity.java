@@ -23,7 +23,7 @@ public class OutputTemplateActivity extends Activity {
     @Override public void onCreate(Bundle b){super.onCreate(b);db=new DbHelper(this);templateId=getIntent().getLongExtra("template_id",0);template=db.getTemplate(templateId);if(template==null){finish();return;}fields=db.getFields(templateId,false);render();}
 
     private void render(){
-        LinearLayout root=Ui.page(this);android.widget.Button back=Ui.button(this,"← Карточки");back.setOnClickListener(v->finish());root.addView(back,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,44)));
+        LinearLayout root=Ui.page(this);android.widget.Button back=Ui.button(this,"← Товары");back.setOnClickListener(v->finish());root.addView(back,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,44)));
         root.addView(Ui.title(this,"Шаблон вывода"));root.addView(Ui.subtitle(this,"Это текст, который можно одним нажатием скопировать для поста, сообщения или описания. Вставляйте значения как {Название поля}."));
         editor=new EditText(this);editor.setText(template.outputTemplate==null?"":template.outputTemplate);editor.setGravity(android.view.Gravity.TOP);editor.setMinLines(10);editor.setTextColor(Ui.TEXT);editor.setBackgroundColor(android.graphics.Color.WHITE);editor.setPadding(Ui.dp(this,12),Ui.dp(this,12),Ui.dp(this,12),Ui.dp(this,12));root.addView(editor,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1));
         root.addView(Ui.text(this,"Вставить поле:",14,Ui.TEXT,true));
