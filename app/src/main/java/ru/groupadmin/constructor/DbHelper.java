@@ -15,7 +15,7 @@ import java.util.Map;
 
 public class DbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "group_admin_constructor.db";
-    private static final int DB_VERSION = 3;
+    private static final int DB_VERSION = 4;
 
     public DbHelper(Context context) { super(context, DB_NAME, null, DB_VERSION); }
 
@@ -26,6 +26,7 @@ public class DbHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE fields (id INTEGER PRIMARY KEY AUTOINCREMENT, template_id INTEGER NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL, position INTEGER NOT NULL, required INTEGER NOT NULL DEFAULT 0, unit TEXT NOT NULL DEFAULT '', default_value TEXT NOT NULL DEFAULT '', options_json TEXT NOT NULL DEFAULT '[]', formula TEXT NOT NULL DEFAULT '', show_in_list INTEGER NOT NULL DEFAULT 1, searchable INTEGER NOT NULL DEFAULT 1, archived INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(template_id) REFERENCES templates(id) ON DELETE CASCADE)");
         db.execSQL("CREATE TABLE records (id INTEGER PRIMARY KEY AUTOINCREMENT, template_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'DRAFT', quantity REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY(template_id) REFERENCES templates(id) ON DELETE CASCADE)");
         db.execSQL("CREATE TABLE field_values (record_id INTEGER NOT NULL, field_id INTEGER NOT NULL, value TEXT NOT NULL DEFAULT '', PRIMARY KEY(record_id, field_id), FOREIGN KEY(record_id) REFERENCES records(id) ON DELETE CASCADE, FOREIGN KEY(field_id) REFERENCES fields(id) ON DELETE CASCADE)");
+        db.execSQL("CREATE TABLE auto_counters (field_id INTEGER PRIMARY KEY, next_value INTEGER NOT NULL, FOREIGN KEY(field_id) REFERENCES fields(id) ON DELETE CASCADE)");
         db.execSQL("CREATE INDEX idx_templates_catalog ON templates(catalog_id)");
         db.execSQL("CREATE INDEX idx_fields_template ON fields(template_id, archived, position)");
         db.execSQL("CREATE INDEX idx_records_template ON records(template_id, updated_at DESC)");
@@ -78,6 +79,9 @@ public class DbHelper extends SQLiteOpenHelper {
                     "SELECT f.id FROM fields f WHERE f.template_id=templates.id " +
                     "AND f.archived=0 AND f.show_in_list=1 AND f.type<>'PHOTO' " +
                     "ORDER BY f.position,f.id LIMIT 1 OFFSET 3),0)");
+        }
+        if (oldVersion < 4) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS auto_counters (field_id INTEGER PRIMARY KEY, next_value INTEGER NOT NULL, FOREIGN KEY(field_id) REFERENCES fields(id) ON DELETE CASCADE)");
         }
     }
 
@@ -359,8 +363,11 @@ public class DbHelper extends SQLiteOpenHelper {
         long id=getWritableDatabase().insertOrThrow("records",null,cv);
 
         for(FieldDef f:getFields(templateId,false)){
-            if(!FieldDef.FORMULA.equals(f.type)&&f.defaultValue!=null&&!f.defaultValue.isEmpty())
+            if(FieldDef.AUTO_COUNTER.equals(f.type)){
+                setValue(id,f.id,allocateAutoCounter(f));
+            } else if(!FieldDef.FORMULA.equals(f.type)&&f.defaultValue!=null&&!f.defaultValue.isEmpty()){
                 setValue(id,f.id,f.defaultValue);
+            }
         }
         return id;
     }
@@ -369,8 +376,11 @@ public class DbHelper extends SQLiteOpenHelper {
         RecordItem r=getRecord(recordId);
         if(r==null)return 0;
         long id=createRecord(r.templateId);
-        for(Map.Entry<Long,String> e:getValues(recordId).entrySet())
+        for(Map.Entry<Long,String> e:getValues(recordId).entrySet()){
+            FieldDef f=getField(e.getKey());
+            if(f!=null && FieldDef.AUTO_COUNTER.equals(f.type)) continue;
             setValue(id,e.getKey(),e.getValue());
+        }
         setRecordQuantity(id,r.quantity);
         return id;
     }
@@ -439,6 +449,67 @@ public class DbHelper extends SQLiteOpenHelper {
             db.setTransactionSuccessful();
         }finally{
             db.endTransaction();
+        }
+    }
+
+    public long getCounterNext(long fieldId){
+        FieldDef f=getField(fieldId);
+        AutoCounter.Config cfg=AutoCounter.parse(f==null?"{}":f.optionsJson);
+        try(Cursor c=getReadableDatabase().rawQuery(
+                "SELECT next_value FROM auto_counters WHERE field_id=?",
+                new String[]{String.valueOf(fieldId)})){
+            if(c.moveToFirst()) return c.getLong(0);
+        }
+        return cfg.start;
+    }
+
+    public void setCounterNext(long fieldId,long nextValue){
+        ContentValues cv=new ContentValues();
+        cv.put("field_id",fieldId);
+        cv.put("next_value",Math.max(0,nextValue));
+        getWritableDatabase().insertWithOnConflict(
+                "auto_counters",null,cv,SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    private String allocateAutoCounter(FieldDef f){
+        SQLiteDatabase db=getWritableDatabase();
+        AutoCounter.Config cfg=AutoCounter.parse(f.optionsJson);
+        db.beginTransaction();
+        try{
+            long next=cfg.start;
+            try(Cursor c=db.rawQuery(
+                    "SELECT next_value FROM auto_counters WHERE field_id=?",
+                    new String[]{String.valueOf(f.id)})){
+                if(c.moveToFirst()) next=c.getLong(0);
+            }
+
+            ContentValues cv=new ContentValues();
+            cv.put("field_id",f.id);
+            cv.put("next_value",Math.max(0,next+cfg.step));
+            db.insertWithOnConflict("auto_counters",null,cv,SQLiteDatabase.CONFLICT_REPLACE);
+            db.setTransactionSuccessful();
+            return AutoCounter.format(cfg,next);
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    public void ensureAutoCounterValues(long fieldId){
+        FieldDef f=getField(fieldId);
+        if(f==null || !FieldDef.AUTO_COUNTER.equals(f.type)) return;
+
+        List<Long> missing=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().rawQuery(
+                "SELECT r.id FROM records r " +
+                        "LEFT JOIN field_values v ON v.record_id=r.id AND v.field_id=? " +
+                        "WHERE r.template_id=? AND (v.value IS NULL OR v.value='') " +
+                        "ORDER BY r.created_at,r.id",
+                new String[]{String.valueOf(fieldId),String.valueOf(f.templateId)})){
+            while(c.moveToNext()) missing.add(c.getLong(0));
+        }
+
+        for(Long recordId:missing){
+            setValue(recordId,fieldId,allocateAutoCounter(f));
         }
     }
 
