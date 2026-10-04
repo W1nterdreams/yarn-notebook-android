@@ -151,7 +151,11 @@ public class MainActivity extends Activity {
         setDemoValue(tid,r,"Цена за кг","8200");
         setDemoValue(tid,r,"Вес","350");
         setDemoValue(tid,r,"Описание","Пример товара для пряжи. Все поля можно переименовать, удалить или дополнить.");
-        db.setRecordQuantity(r,4);\n        db.markRecordSaved(r);\n    }\n\n    private void createEngineDemo(long catalogId) {
+        db.setRecordQuantity(r,4);
+        db.markRecordSaved(r);
+    }
+
+    private void createEngineDemo(long catalogId) {
         long tid = db.createTemplate(catalogId, "Двигатель", "шт.");
         addDemoField(tid,"Название",FieldDef.TEXT,true,"","",true,true,"");
         addDemoField(tid,"Марка автомобиля",FieldDef.SINGLE_CHOICE,false,"","",true,true,"BMW\nMercedes-Benz\nVolkswagen\nAudi\nToyota\nДругая");
