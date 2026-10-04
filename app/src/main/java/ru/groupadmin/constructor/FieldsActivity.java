@@ -63,7 +63,7 @@ public class FieldsActivity extends Activity {
         if (fields.isEmpty()) {
             LinearLayout c = Ui.infoCard(this, Ui.PRIMARY_SOFT, Ui.BORDER);
             c.addView(Ui.text(this, "Пока нет полей", 18, Ui.PRIMARY_DARK, true));
-            c.addView(Ui.text(this, "Добавьте любые характеристики: текст, числа, цену, выбор из списка, повторяемые группы, дату, фото или формулу.", 14, Ui.MUTED, false));
+            c.addView(Ui.text(this, "Добавьте любые характеристики: текст, числа, автосчётчик, цену, выбор из списка, повторяемые группы, дату, фото или формулу.", 14, Ui.MUTED, false));
             list.addView(c);
             return;
         }
@@ -101,6 +101,13 @@ public class FieldsActivity extends Activity {
             if (FieldDef.REPEAT_GROUP.equals(f.type)) {
                 c.addView(Ui.spacer(this,6));
                 c.addView(Ui.text(this,"Подполей: " + RepeatGroup.parseConfig(f.optionsJson).size(),13,Ui.MUTED,false));
+            }
+            if (FieldDef.AUTO_COUNTER.equals(f.type)) {
+                AutoCounter.Config cfg=AutoCounter.parse(f.optionsJson);
+                c.addView(Ui.spacer(this,6));
+                c.addView(Ui.text(this,
+                        "Следующий: " + AutoCounter.format(cfg,db.getCounterNext(f.id)),
+                        13,Ui.PRIMARY_DARK,true));
             }
 
             c.addView(Ui.spacer(this,10));
@@ -150,7 +157,11 @@ public class FieldsActivity extends Activity {
                     FieldDef f = archived.get(which);
                     new AlertDialog.Builder(this).setTitle(f.name)
                             .setMessage("Вернуть поле в товар?")
-                            .setPositiveButton("Вернуть", (d2,w) -> { db.setFieldArchived(f.id, false); refresh(); })
+                            .setPositiveButton("Вернуть", (d2,w) -> {
+                                db.setFieldArchived(f.id, false);
+                                if (FieldDef.AUTO_COUNTER.equals(f.type)) db.ensureAutoCounterValues(f.id);
+                                refresh();
+                            })
                             .setNegativeButton("Отмена", null).show();
                 }).setNegativeButton("Закрыть", null).show();
     }
