@@ -1,0 +1,41 @@
+package ru.groupadmin.constructor;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.os.Bundle;
+import android.view.ViewGroup;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+import java.util.List;
+
+public class OutputTemplateActivity extends Activity {
+    private DbHelper db;
+    private long templateId;
+    private CardTemplate template;
+    private List<FieldDef> fields;
+    private EditText editor;
+
+    @Override public void onCreate(Bundle b){super.onCreate(b);db=new DbHelper(this);templateId=getIntent().getLongExtra("template_id",0);template=db.getTemplate(templateId);if(template==null){finish();return;}fields=db.getFields(templateId,false);render();}
+
+    private void render(){
+        LinearLayout root=Ui.page(this);android.widget.Button back=Ui.button(this,"← Карточки");back.setOnClickListener(v->finish());root.addView(back,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,44)));
+        root.addView(Ui.title(this,"Шаблон вывода"));root.addView(Ui.subtitle(this,"Это текст, который можно одним нажатием скопировать для поста, сообщения или описания. Вставляйте значения как {Название поля}."));
+        editor=new EditText(this);editor.setText(template.outputTemplate==null?"":template.outputTemplate);editor.setGravity(android.view.Gravity.TOP);editor.setMinLines(10);editor.setTextColor(Ui.TEXT);editor.setBackgroundColor(android.graphics.Color.WHITE);editor.setPadding(Ui.dp(this,12),Ui.dp(this,12),Ui.dp(this,12),Ui.dp(this,12));root.addView(editor,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1));
+        root.addView(Ui.text(this,"Вставить поле:",14,Ui.TEXT,true));
+        android.widget.HorizontalScrollView hs=new android.widget.HorizontalScrollView(this);LinearLayout buttons=Ui.row(this);for(FieldDef f:fields){android.widget.Button b=Ui.button(this,f.name);b.setOnClickListener(v->insert("{"+f.name+"}"));buttons.addView(b,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,Ui.dp(this,44)));}hs.addView(buttons);root.addView(hs,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,50)));
+        LinearLayout actions=Ui.row(this);android.widget.Button auto=Ui.button(this,"Авто");android.widget.Button preview=Ui.button(this,"Пример");android.widget.Button save=Ui.primaryButton(this,"Сохранить");actions.addView(auto,new LinearLayout.LayoutParams(0,Ui.dp(this,52),1));actions.addView(preview,new LinearLayout.LayoutParams(0,Ui.dp(this,52),1));actions.addView(save,new LinearLayout.LayoutParams(0,Ui.dp(this,52),1));root.addView(actions);setContentView(root);
+        auto.setOnClickListener(v->editor.setText(OutputEngine.autoPattern(fields)));preview.setOnClickListener(v->preview());save.setOnClickListener(v->{db.setOutputTemplate(templateId,editor.getText().toString());toast("Шаблон сохранён");finish();});
+    }
+    private void insert(String s){int st=Math.max(0,editor.getSelectionStart());editor.getText().insert(st,s);}
+    private void preview(){
+        CardTemplate temp=new CardTemplate();temp.outputTemplate=editor.getText().toString();List<RecordItem> records=db.getRecords(templateId);String text;
+        if(records.isEmpty()){java.util.Map<Long,String> sample=new java.util.LinkedHashMap<>();for(FieldDef f:fields){if(FieldDef.FORMULA.equals(f.type))continue;sample.put(f.id,"["+f.name+"]");}text=OutputEngine.render(db,temp,fields,sample);}else{text=OutputEngine.render(db,temp,fields,db.getValues(records.get(0).id));}
+        new AlertDialog.Builder(this).setTitle("Предпросмотр").setMessage(text.isEmpty()?"Пустой шаблон":text).setPositiveButton("Копировать",(d,w)->{ClipboardManager cm=(ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);cm.setPrimaryClip(ClipData.newPlainText("Предпросмотр",text));toast("Скопировано");}).setNegativeButton("Закрыть",null).show();
+    }
+    private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
+}
