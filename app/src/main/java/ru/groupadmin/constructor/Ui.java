@@ -13,6 +13,10 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+
 final class Ui {
     static final int BG = Color.rgb(245,246,248);
     static final int CARD = Color.WHITE;
@@ -28,7 +32,17 @@ final class Ui {
         LinearLayout root = new LinearLayout(a);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
-        root.setPadding(dp(a,12),dp(a,8),dp(a,12),dp(a,12));
+        final int left = dp(a,12);
+        final int top = dp(a,8);
+        final int right = dp(a,12);
+        final int bottom = dp(a,12);
+        root.setPadding(left, top, right, bottom);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(left + bars.left, top + bars.top, right + bars.right, bottom + bars.bottom);
+            return insets;
+        });
+        ViewCompat.requestApplyInsets(root);
         return root;
     }
 
