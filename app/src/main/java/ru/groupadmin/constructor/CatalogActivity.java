@@ -82,7 +82,7 @@ public class CatalogActivity extends Activity {
 
             LinearLayout stats=Ui.row(this);
             stats.addView(Ui.badge(this,"Полей: "+db.getFields(t.id,false).size(),Ui.PRIMARY_DARK,Ui.PRIMARY_SOFT));
-            stats.addView(Ui.spacer(this,6));
+            stats.addView(Ui.hSpacer(this,6));
             stats.addView(Ui.badge(this,"Товаров: "+db.countRecords(t.id),Ui.SUCCESS,Ui.SUCCESS_BG));
             c.addView(Ui.spacer(this,9));
             c.addView(stats);
@@ -97,7 +97,7 @@ public class CatalogActivity extends Activity {
             r.addView(fields,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
             c.addView(r);
 
-            c.addView(Ui.spacer(this,6));
+            c.addView(Ui.hSpacer(this,6));
             LinearLayout r2=Ui.row(this);
             android.widget.Button settings=Ui.outlineButton(this,"Настройки");
             android.widget.Button del=Ui.dangerButton(this,"Удалить тип");
