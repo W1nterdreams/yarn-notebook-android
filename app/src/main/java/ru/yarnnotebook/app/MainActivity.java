@@ -1798,6 +1798,33 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == REQ_CAMERA) {
+            try {
+                if (resultCode == RESULT_OK && pendingCameraFile != null && pendingCameraYarnId > 0) {
+                    YarnRecord record = db.getYarn(pendingCameraYarnId);
+                    if (record == null) throw new IOException("Карточка товара не найдена");
+
+                    String fileName = PhotoStore.saveCompressed(
+                            this,
+                            pendingCameraFile,
+                            record.internalNumber,
+                            record.archived);
+                    db.setPhotoFile(record.id, fileName);
+                    record.photoFile = fileName;
+                    updateEditorPhotoViews(record);
+                    Toast.makeText(this, "Фотография сохранена", Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Toast.makeText(this, "Ошибка фотографии: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            } finally {
+                if (pendingCameraFile != null && pendingCameraFile.exists()) pendingCameraFile.delete();
+                pendingCameraFile = null;
+                pendingCameraYarnId = 0;
+            }
+            return;
+        }
+
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         if (requestCode == REQ_EXPORT_JSON) {
