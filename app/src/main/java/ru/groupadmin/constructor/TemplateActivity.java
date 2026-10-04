@@ -207,7 +207,7 @@ public class TemplateActivity extends Activity {
         minus.setTextSize(22);
         plus.setTextSize(20);
         row.addView(minus,new LinearLayout.LayoutParams(Ui.dp(this,56),Ui.dp(this,48)));
-        row.addView(Ui.spacer(this,6));
+        row.addView(Ui.hSpacer(this,6));
         row.addView(plus,new LinearLayout.LayoutParams(Ui.dp(this,56),Ui.dp(this,48)));
 
         stock.addView(row);
