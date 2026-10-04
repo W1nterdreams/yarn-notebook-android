@@ -32,17 +32,19 @@ public class MainActivity extends Activity {
     private void render() {
         LinearLayout root = Ui.page(this);
         root.addView(Ui.title(this, "Конструктор товаров"));
-        root.addView(Ui.subtitle(this, "Сегодня пряжа, завтра двигатель или запчасти: создавайте сколько угодно типов товаров, каждый со своими полями, вариантами ввода, формулами и шаблоном вывода."));
+        root.addView(Ui.subtitle(this, "Собирайте свою базу под любой товар: пряжу, двигатель, одежду, запчасти или совершенно другую категорию."));
+
+        android.widget.Button add=Ui.primaryButton(this,"＋ Создать новую базу");
+        root.addView(add,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,52)));
 
         LinearLayout actions=Ui.row(this);
-        android.widget.Button add=Ui.primaryButton(this,"＋ Новая база");
-        android.widget.Button demo=Ui.button(this,"Демо: 3 товара");
-        android.widget.Button imp=Ui.button(this,"Импорт JSON");
-        actions.addView(add,new LinearLayout.LayoutParams(0,Ui.dp(this,50),1));
-        actions.addView(demo,new LinearLayout.LayoutParams(0,Ui.dp(this,50),1));
-        actions.addView(imp,new LinearLayout.LayoutParams(0,Ui.dp(this,50),1));
+        android.widget.Button demo=Ui.outlineButton(this,"Демо");
+        android.widget.Button imp=Ui.outlineButton(this,"Импорт JSON");
+        actions.addView(demo,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
+        actions.addView(imp,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
+        root.addView(Ui.spacer(this,6));
         root.addView(actions);
-        root.addView(Ui.spacer(this,8));
+        root.addView(Ui.sectionTitle(this,"МОИ БАЗЫ"));
 
         list=new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
         android.widget.ScrollView scroll=Ui.scroll(this,list);
@@ -68,11 +70,17 @@ public class MainActivity extends Activity {
         for(Catalog c:catalogs) {
             LinearLayout card=Ui.card(this);
             card.addView(Ui.text(this,c.name,19,Ui.TEXT,true));
-            card.addView(Ui.text(this,"Типов товара: "+db.countTemplates(c.id)+" · товаров: "+db.countRecordsForCatalog(c.id),13,Ui.MUTED,false));
+            LinearLayout stats=Ui.row(this);
+            stats.addView(Ui.badge(this,"Типов: "+db.countTemplates(c.id),Ui.PRIMARY_DARK,Ui.PRIMARY_SOFT));
+            stats.addView(Ui.spacer(this,6));
+            stats.addView(Ui.badge(this,"Товаров: "+db.countRecordsForCatalog(c.id),Ui.SUCCESS,Ui.SUCCESS_BG));
+            card.addView(Ui.spacer(this,10));
+            card.addView(stats);
+            card.addView(Ui.spacer(this,10));
             LinearLayout row=Ui.row(this);
             android.widget.Button open=Ui.primaryButton(this,"Открыть");
-            android.widget.Button rename=Ui.button(this,"Название");
-            android.widget.Button del=Ui.button(this,"Удалить");
+            android.widget.Button rename=Ui.outlineButton(this,"Переименовать");
+            android.widget.Button del=Ui.dangerButton(this,"Удалить");
             row.addView(open,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
             row.addView(rename,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
             row.addView(del,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
