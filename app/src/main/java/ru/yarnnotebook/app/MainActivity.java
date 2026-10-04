@@ -801,8 +801,12 @@ public class MainActivity extends Activity {
         YarnRecord existing = yarnId == 0 ? null : db.getYarn(yarnId);
 
         LinearLayout page = page();
-        String top = existing == null ? "Новая пряжа" : (!existing.saved ? "Пряжа · не сохранена" : "Карточка пряжи");
-        page.addView(toolbar(top, v -> showLayout(layoutId, "")));
+        String top = existing == null
+                ? "Новая пряжа"
+                : (existing.archived
+                    ? "Архив · #" + existing.internalNumber
+                    : (!existing.saved ? "Пряжа · не сохранена" : "Карточка пряжи"));
+        page.addView(toolbar(top, v -> backFromEditor()));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -914,6 +918,36 @@ public class MainActivity extends Activity {
         fDescription.setOnFocusChangeListener(descriptionFocus);
         fDescription.setOnClickListener(v -> scheduleDescriptionVisibility(scroll));
 
+        TextView photoLabel = text("Фото товара", 14, TEXT, true);
+        photoLabel.setPadding(dp(2), dp(12), 0, dp(6));
+        form.addView(photoLabel);
+
+        editorPhotoPreview = new ImageView(this);
+        editorPhotoPreview.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        editorPhotoPreview.setAdjustViewBounds(true);
+        LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(220));
+        previewParams.setMargins(0, 0, 0, dp(6));
+        form.addView(editorPhotoPreview, previewParams);
+
+        LinearLayout photoActions = horizontal();
+        editorPhotoButton = button("Снять фото");
+        editorDeletePhotoButton = button("Удалить фото");
+        LinearLayout.LayoutParams photoButtonParams = new LinearLayout.LayoutParams(0, dp(50), 1);
+        LinearLayout.LayoutParams photoDeleteParams = new LinearLayout.LayoutParams(0, dp(50), 1);
+        photoDeleteParams.setMargins(dp(8), 0, 0, 0);
+        photoActions.addView(editorPhotoButton, photoButtonParams);
+        photoActions.addView(editorDeletePhotoButton, photoDeleteParams);
+        form.addView(photoActions);
+
+        editorInternalArticle = text("", 15, TEXT, true);
+        editorInternalArticle.setPadding(dp(2), dp(12), 0, dp(8));
+        form.addView(editorInternalArticle);
+
+        editorPhotoButton.setOnClickListener(v -> startCameraForEditor(existing));
+        editorDeletePhotoButton.setOnClickListener(v -> removeCurrentPhoto(existing));
+        updateEditorPhotoViews(existing);
+
         final int formLeft = dp(14);
         final int formTop = dp(14);
         final int formRight = dp(14);
@@ -960,7 +994,15 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
         cp.setMargins(0, 0, 0, dp(8));
         form.addView(copy, cp);
-        copy.setOnClickListener(v -> copyVkText(collect(existing)));
+        copy.setOnClickListener(v -> {
+            YarnRecord current = collect(existing);
+            if (current.id == 0 || current.internalNumber <= 0) {
+                db.saveYarn(current, false);
+                currentYarnId = current.id;
+                updateEditorPhotoViews(db.getYarn(current.id));
+            }
+            copyVkText(current);
+        });
 
         if (existing != null) {
             Button duplicate = button("Дублировать");
@@ -982,11 +1024,13 @@ public class MainActivity extends Activity {
             form.addView(delete, delp);
             delete.setOnClickListener(v -> new AlertDialog.Builder(this)
                     .setTitle("Удалить карточку?")
-                    .setMessage("Это действие нельзя отменить.")
+                    .setMessage("Карточка и её локальная фотография будут удалены. Это действие нельзя отменить.")
                     .setNegativeButton("Отмена", null)
                     .setPositiveButton("Удалить", (d, w) -> {
+                        boolean wasArchived = existing.archived;
                         db.deleteYarn(existing.id);
-                        showLayout(layoutId, "");
+                        if (wasArchived) showArchive("");
+                        else showLayout(layoutId, "");
                     }).show());
         }
 
@@ -1237,9 +1281,15 @@ public class MainActivity extends Activity {
 
     private YarnRecord collect(YarnRecord existing) {
         YarnRecord r = new YarnRecord();
-        if (existing != null) {
-            r.id = existing.id;
-            r.saved = existing.saved;
+        YarnRecord base = existing;
+        if (base == null && currentYarnId > 0) base = db.getYarn(currentYarnId);
+        if (base != null) {
+            r.id = base.id;
+            r.saved = base.saved;
+            r.internalNumber = base.internalNumber;
+            r.archived = base.archived;
+            r.archivedAt = base.archivedAt;
+            r.photoFile = base.photoFile;
         }
         r.layoutId = currentLayoutId;
         r.country = s(fCountry);
@@ -1327,6 +1377,10 @@ public class MainActivity extends Activity {
         if (!blank(r.description)) {
             if (b.length() > 0) b.append("\n");
             b.append(r.description.trim());
+        }
+        if (r.internalNumber > 0) {
+            if (b.length() > 0) b.append("\n\n");
+            b.append("#").append(r.internalNumber);
         }
         return b.toString().trim();
     }
