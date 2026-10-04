@@ -9,7 +9,7 @@ import com.vk.api.sdk.internal.ApiCommand;
 
 import org.json.JSONObject;
 
-import java.util.Collections;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,7 +22,7 @@ public final class VkApi {
     private VkApi() { }
 
     public static void call(String method, Map<String, Object> params, Callback callback) {
-        Map<String, Object> safe = params == null ? Collections.emptyMap() : new HashMap<>(params);
+        Map<String, String> safe = stringify(params);
         VK.execute(new RawCommand(method, safe), new VKApiCallback<Object>() {
             @Override public void success(Object result) {
                 callback.success(result);
@@ -34,11 +34,33 @@ public final class VkApi {
         });
     }
 
+    private static Map<String, String> stringify(Map<String, Object> source) {
+        Map<String, String> out = new HashMap<>();
+        if (source == null) return out;
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            Object value = entry.getValue();
+            if (value == null) continue;
+            if (value instanceof Boolean) {
+                out.put(entry.getKey(), ((Boolean) value) ? "1" : "0");
+            } else if (value instanceof Collection) {
+                StringBuilder joined = new StringBuilder();
+                for (Object item : (Collection<?>) value) {
+                    if (joined.length() > 0) joined.append(',');
+                    joined.append(String.valueOf(item));
+                }
+                out.put(entry.getKey(), joined.toString());
+            } else {
+                out.put(entry.getKey(), String.valueOf(value));
+            }
+        }
+        return out;
+    }
+
     private static final class RawCommand extends ApiCommand<Object> {
         private final String method;
-        private final Map<String, Object> params;
+        private final Map<String, String> params;
 
-        RawCommand(String method, Map<String, Object> params) {
+        RawCommand(String method, Map<String, String> params) {
             this.method = method;
             this.params = params;
         }
