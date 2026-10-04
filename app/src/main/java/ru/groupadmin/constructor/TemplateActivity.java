@@ -31,12 +31,12 @@ public class TemplateActivity extends Activity {
     private void render(){
         template=db.getTemplate(templateId);if(template==null){finish();return;}
         LinearLayout root=Ui.page(this);
-        android.widget.Button back=Ui.button(this,"← Типы карточек");back.setOnClickListener(v->finish());root.addView(back,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,44)));
+        android.widget.Button back=Ui.button(this,"← Типы товаров");back.setOnClickListener(v->finish());root.addView(back,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,44)));
         root.addView(Ui.title(this,template.name));
         root.addView(Ui.subtitle(this,"Товары строятся из созданных вами полей. Формулы пересчитываются автоматически."));
 
         LinearLayout actions=Ui.row(this);
-        android.widget.Button add=Ui.primaryButton(this,"＋ Карточка");
+        android.widget.Button add=Ui.primaryButton(this,"＋ Товар");
         android.widget.Button fieldsBtn=Ui.button(this,"Поля");
         android.widget.Button output=Ui.button(this,"Шаблон вывода");
         actions.addView(add,new LinearLayout.LayoutParams(0,Ui.dp(this,50),1));actions.addView(fieldsBtn,new LinearLayout.LayoutParams(0,Ui.dp(this,50),1));actions.addView(output,new LinearLayout.LayoutParams(0,Ui.dp(this,50),1.2f));root.addView(actions);
@@ -74,6 +74,6 @@ public class TemplateActivity extends Activity {
     private void openRecord(long id){Intent i=new Intent(this,RecordEditActivity.class);i.putExtra("record_id",id);startActivity(i);}
     private void openFields(){Intent i=new Intent(this,FieldsActivity.class);i.putExtra("template_id",templateId);startActivity(i);}
     private void openOutput(){Intent i=new Intent(this,OutputTemplateActivity.class);i.putExtra("template_id",templateId);startActivity(i);}
-    private void copyText(long recordId){String text=OutputEngine.render(db,template,fields,db.getValues(recordId));ClipboardManager cm=(ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);cm.setPrimaryClip(ClipData.newPlainText("Карточка",text));toast("Текст товара скопирован");}
+    private void copyText(long recordId){String text=OutputEngine.render(db,template,fields,db.getValues(recordId));ClipboardManager cm=(ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);cm.setPrimaryClip(ClipData.newPlainText("Товар",text));toast("Текст товара скопирован");}
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
 }
