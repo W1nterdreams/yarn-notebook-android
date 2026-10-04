@@ -26,6 +26,7 @@ final class FieldDef {
     static final String MULTI_CHOICE = "MULTI_CHOICE";
     static final String PHOTO = "PHOTO";
     static final String FORMULA = "FORMULA";
+    static final String REPEAT_GROUP = "REPEAT_GROUP";
 
     long id;
     long templateId;
@@ -52,12 +53,13 @@ final class FieldDef {
         if (MULTI_CHOICE.equals(type)) return "Несколько вариантов";
         if (PHOTO.equals(type)) return "Фотография";
         if (FORMULA.equals(type)) return "Формула";
+        if (REPEAT_GROUP.equals(type)) return "Повторяемая группа";
         return "Текст";
     }
 
     static String[] allTypes() {
         return new String[]{TEXT, MULTILINE, INTEGER, DECIMAL, PRICE, CHECKBOX, DATE,
-                SINGLE_CHOICE, MULTI_CHOICE, PHOTO, FORMULA};
+                SINGLE_CHOICE, MULTI_CHOICE, REPEAT_GROUP, PHOTO, FORMULA};
     }
 }
 
