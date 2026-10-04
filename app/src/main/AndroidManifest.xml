@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:allowBackup="true"
-        android:label="Конструктор карточек"
+        android:label="Конструктор товаров"
         android:theme="@style/AppTheme"
         android:enableOnBackInvokedCallback="true"
         android:supportsRtl="true"
