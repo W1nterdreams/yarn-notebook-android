@@ -174,6 +174,15 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void backFromEditor() {
+        YarnRecord current = currentYarnId > 0 ? db.getYarn(currentYarnId) : null;
+        if (current != null && current.archived) {
+            showArchive("");
+        } else {
+            showLayout(currentLayoutId, "");
+        }
+    }
+
     private void showHome() {
         screen = Screen.HOME;
         currentLayoutId = 0;
@@ -458,20 +467,40 @@ public class MainActivity extends Activity {
 
     private View yarnCard(YarnRecord y, boolean showDate, int number) {
         LinearLayout card = card();
-        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+        card.setPadding(dp(14), dp(14), dp(14), dp(14));
 
+        LinearLayout top = horizontal();
+        top.setGravity(Gravity.TOP);
+
+        if (PhotoStore.exists(this, y)) {
+            ImageView thumb = new ImageView(this);
+            thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            Bitmap bitmap = PhotoStore.loadThumbnail(this, y, dp(180));
+            if (bitmap != null) thumb.setImageBitmap(bitmap);
+            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(dp(82), dp(82));
+            tp.setMargins(0, 0, dp(12), 0);
+            top.addView(thumb, tp);
+        }
+
+        LinearLayout info = vertical();
         LinearLayout titleRow = horizontal();
         titleRow.setGravity(Gravity.TOP);
         String numberedTitle = number > 0 ? "№" + number + " · " + displayTitle(y) : displayTitle(y);
         TextView title = text(numberedTitle, 19, TEXT, true);
         titleRow.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        if (!y.saved) {
+        if (!y.saved && !y.archived) {
             TextView draft = text("НЕ СОХРАНЕНА", 11, DRAFT, true);
             draft.setGravity(Gravity.END);
             draft.setPadding(dp(8), dp(4), 0, 0);
             titleRow.addView(draft);
         }
-        card.addView(titleRow);
+        info.addView(titleRow);
+
+        if (y.internalNumber > 0) {
+            TextView internal = text("#" + y.internalNumber, 13, MUTED, true);
+            internal.setPadding(0, dp(4), 0, 0);
+            info.addView(internal);
+        }
 
         StringBuilder details = new StringBuilder();
         if (!blank(y.shade)) details.append("Оттенок: ").append(y.shade.trim());
@@ -481,21 +510,25 @@ public class MainActivity extends Activity {
         }
         if (details.length() == 0) details.append("Оттенок и цвет не заполнены");
         TextView colorLine = text(details.toString(), 14, MUTED, false);
-        colorLine.setPadding(0, dp(7), 0, dp(8));
-        card.addView(colorLine);
+        colorLine.setPadding(0, dp(6), 0, 0);
+        info.addView(colorLine);
 
         if (showDate) {
             TextView date = text("Выкладка: " + formatDate(y.layoutDate), 13, MUTED, false);
-            date.setPadding(0, 0, 0, dp(8));
-            card.addView(date);
+            date.setPadding(0, dp(5), 0, 0);
+            info.addView(date);
         }
+
+        top.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        card.addView(top);
 
         LinearLayout storageRow = horizontal();
         storageRow.setGravity(Gravity.CENTER_VERTICAL);
+        storageRow.setPadding(0, dp(10), 0, 0);
         String storageText = blank(y.storageLocation) ? "Место хранения: —" : "Место хранения: " + y.storageLocation.trim();
         TextView storage = text(storageText, 13, blank(y.storageLocation) ? MUTED : TEXT, false);
         storageRow.addView(storage, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        if (!showDate) {
+        if (!showDate && !y.archived) {
             Button editStorage = button("Изменить место");
             editStorage.setTextSize(12);
             LinearLayout.LayoutParams ep = new LinearLayout.LayoutParams(dp(138), dp(42));
@@ -509,7 +542,12 @@ public class MainActivity extends Activity {
             currentLayoutId = y.layoutId;
             showEditor(y.layoutId, y.id);
         });
-        if (!showDate) {
+        if (y.archived) {
+            card.setOnLongClickListener(v -> {
+                showArchivedYarnActions(y);
+                return true;
+            });
+        } else if (!showDate) {
             card.setOnLongClickListener(v -> {
                 showYarnActions(y);
                 return true;
@@ -551,7 +589,7 @@ public class MainActivity extends Activity {
     private void showYarnActions(YarnRecord y) {
         new AlertDialog.Builder(this)
                 .setTitle(displayTitle(y))
-                .setItems(new String[]{"Скопировать описание для VK", "Дублировать", "Удалить"}, (dialog, which) -> {
+                .setItems(new String[]{"Скопировать описание для VK", "Дублировать", "В архив проданного", "Удалить"}, (dialog, which) -> {
                     if (which == 0) {
                         copyVkText(y);
                     } else if (which == 1) {
@@ -560,10 +598,24 @@ public class MainActivity extends Activity {
                             Toast.makeText(this, "Создана копия · НЕ СОХРАНЕНА", Toast.LENGTH_SHORT).show();
                             showLayout(y.layoutId, "");
                         }
+                    } else if (which == 2) {
+                        new AlertDialog.Builder(this)
+                                .setTitle("Перенести в архив проданного?")
+                                .setMessage("Карточка исчезнет из выкладки и общего поиска. Локальная фотография будет перенесена в папку архива.")
+                                .setNegativeButton("Отмена", null)
+                                .setPositiveButton("В архив", (d, w) -> {
+                                    if (db.archiveYarn(y.id)) {
+                                        Toast.makeText(this, "Перенесено в архив", Toast.LENGTH_SHORT).show();
+                                        showLayout(y.layoutId, "");
+                                    } else {
+                                        Toast.makeText(this, "Не удалось перенести фотографию в архив", Toast.LENGTH_LONG).show();
+                                    }
+                                })
+                                .show();
                     } else {
                         new AlertDialog.Builder(this)
                                 .setTitle("Удалить карточку?")
-                                .setMessage("Это действие нельзя отменить.")
+                                .setMessage("Карточка и её локальная фотография будут удалены. Это действие нельзя отменить.")
                                 .setNegativeButton("Отмена", null)
                                 .setPositiveButton("Удалить", (d, w) -> {
                                     db.deleteYarn(y.id);
@@ -573,6 +625,80 @@ public class MainActivity extends Activity {
                     }
                 })
                 .show();
+    }
+
+    private void showArchivedYarnActions(YarnRecord y) {
+        new AlertDialog.Builder(this)
+                .setTitle("#" + y.internalNumber + " · " + displayTitle(y))
+                .setItems(new String[]{"Вернуть в наличие", "Удалить навсегда"}, (dialog, which) -> {
+                    if (which == 0) {
+                        if (db.restoreYarn(y.id)) {
+                            Toast.makeText(this, "Возвращено в наличие", Toast.LENGTH_SHORT).show();
+                            showArchive("");
+                        } else {
+                            Toast.makeText(this, "Не удалось вернуть фотографию из архива", Toast.LENGTH_LONG).show();
+                        }
+                    } else {
+                        new AlertDialog.Builder(this)
+                                .setTitle("Удалить из архива?")
+                                .setMessage("Карточка и её локальная фотография будут удалены навсегда.")
+                                .setNegativeButton("Отмена", null)
+                                .setPositiveButton("Удалить", (d, w) -> {
+                                    db.deleteYarn(y.id);
+                                    showArchive("");
+                                })
+                                .show();
+                    }
+                })
+                .show();
+    }
+
+    private void showArchive(String initialQuery) {
+        screen = Screen.ARCHIVE;
+        currentLayoutId = 0;
+        currentYarnId = 0;
+
+        LinearLayout page = page();
+        page.addView(toolbar("Архив проданного", v -> showHome()));
+
+        SearchView search = new SearchView(this);
+        search.setQueryHint("Поиск: #123, артикул, цвет, состав…");
+        search.setIconifiedByDefault(false);
+        search.setQuery(initialQuery == null ? "" : initialQuery, false);
+        page.addView(search, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(62)));
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = vertical();
+        list.setPadding(dp(12), dp(4), dp(12), dp(90));
+        scroll.addView(list);
+        page.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+
+        Runnable render = () -> {
+            list.removeAllViews();
+            List<YarnRecord> archived = db.searchArchive(search.getQuery().toString());
+            TextView count = text("В архиве: " + archived.size(), 14, MUTED, false);
+            count.setPadding(dp(4), dp(4), 0, dp(8));
+            list.addView(count);
+
+            if (archived.isEmpty()) {
+                TextView empty = text(search.getQuery().length() == 0
+                        ? "Архив пока пуст."
+                        : "В архиве ничего не найдено.", 17, MUTED, false);
+                empty.setGravity(Gravity.CENTER);
+                empty.setPadding(dp(20), dp(55), dp(20), dp(20));
+                list.addView(empty);
+                return;
+            }
+
+            for (YarnRecord y : archived) list.addView(yarnCard(y, true, 0));
+        };
+
+        search.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override public boolean onQueryTextSubmit(String query) { render.run(); return true; }
+            @Override public boolean onQueryTextChange(String newText) { render.run(); return true; }
+        });
+        render.run();
+        setContentView(page);
     }
 
     private void showGlobalSearch() {
