@@ -79,7 +79,7 @@ public class MainActivity extends Activity {
             card.addView(Ui.spacer(this,10));
             LinearLayout row=Ui.row(this);
             android.widget.Button open=Ui.primaryButton(this,"Открыть");
-            android.widget.Button rename=Ui.outlineButton(this,"Переименовать");
+            android.widget.Button rename=Ui.outlineButton(this,"Название");
             android.widget.Button del=Ui.dangerButton(this,"Удалить");
             row.addView(open,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
             row.addView(rename,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
@@ -130,7 +130,7 @@ public class MainActivity extends Activity {
     }
 
     private void createYarnDemo(long catalogId) {
-        long tid = db.createTemplate(catalogId, "Пряжа");
+        long tid = db.createTemplate(catalogId, "Пряжа", "боб.");
         addDemoField(tid,"Название",FieldDef.TEXT,true,"","",true,true,"");
         addDemoField(tid,"Производитель",FieldDef.TEXT,false,"","",true,true,"");
         addDemoField(tid,"Состав",FieldDef.REPEAT_GROUP,false,"","",true,true,RepeatGroup.compositionConfig());
@@ -141,21 +141,18 @@ public class MainActivity extends Activity {
         addDemoField(tid,"Стоимость",FieldDef.FORMULA,false,"₽","",true,false,"={Цена за кг}*{Вес}/1000");
         addDemoField(tid,"Фото",FieldDef.PHOTO,false,"","",false,false,"");
         addDemoField(tid,"Описание",FieldDef.MULTILINE,false,"","",false,true,"");
-        db.setOutputTemplate(tid,"{Название}\nПроизводитель: {Производитель}\nСостав: {Состав}\nМетраж: {Метраж}\nЦвет: {Цвет}\nЦена: {Цена за кг}\nВес: {Вес}\nСтоимость: {Стоимость}\n\n{Описание}");
+        db.setOutputTemplate(tid,"{Название}\nПроизводитель: {Производитель}\nСостав: {Состав}\nМетраж: {Метраж}\nЦвет: {Цвет}\nЦена: {Цена за кг}\nВес: {Вес}\nВ наличии: {Количество} {Единица учёта}\nСтоимость: {Стоимость}\n\n{Описание}");
         long r=db.createRecord(tid);
         setDemoValue(tid,r,"Название","Cariaggi Cashmere");
         setDemoValue(tid,r,"Производитель","Cariaggi");
-        setDemoValue(tid,r,"Состав","[{\\\"Материал\\\":\\\"Кашемир\\\",\\\"Доля\\\":\\\"100\\\"}]");
+        setDemoValue(tid,r,"Состав","[{\"Материал\":\"Кашемир\",\"Доля\":\"100\"}]");
         setDemoValue(tid,r,"Метраж","1400");
         setDemoValue(tid,r,"Цвет","Графит");
         setDemoValue(tid,r,"Цена за кг","8200");
         setDemoValue(tid,r,"Вес","350");
         setDemoValue(tid,r,"Описание","Пример товара для пряжи. Все поля можно переименовать, удалить или дополнить.");
-        db.markRecordSaved(r);
-    }
-
-    private void createEngineDemo(long catalogId) {
-        long tid = db.createTemplate(catalogId, "Двигатель");
+        db.setRecordQuantity(r,4);\n        db.markRecordSaved(r);\n    }\n\n    private void createEngineDemo(long catalogId) {
+        long tid = db.createTemplate(catalogId, "Двигатель", "шт.");
         addDemoField(tid,"Название",FieldDef.TEXT,true,"","",true,true,"");
         addDemoField(tid,"Марка автомобиля",FieldDef.SINGLE_CHOICE,false,"","",true,true,"BMW\nMercedes-Benz\nVolkswagen\nAudi\nToyota\nДругая");
         addDemoField(tid,"Модель",FieldDef.TEXT,false,"","",true,true,"");
@@ -170,7 +167,7 @@ public class MainActivity extends Activity {
         addDemoField(tid,"Цена со скидкой",FieldDef.FORMULA,false,"₽","",true,false,"=ROUND({Цена}*(100-{Скидка})/100;0)");
         addDemoField(tid,"Фото",FieldDef.PHOTO,false,"","",false,false,"");
         addDemoField(tid,"Комментарий",FieldDef.MULTILINE,false,"","",false,true,"");
-        db.setOutputTemplate(tid,"{Название}\nМарка: {Марка автомобиля}\nМодель: {Модель}\nКод двигателя: {Код двигателя}\nОбъём: {Объём}\nМощность: {Мощность}\nПробег: {Пробег}\nТопливо: {Топливо}\nСостояние: {Состояние}\nЦена: {Цена}\nЦена со скидкой: {Цена со скидкой}\n\n{Комментарий}");
+        db.setOutputTemplate(tid,"{Название}\nМарка: {Марка автомобиля}\nМодель: {Модель}\nКод двигателя: {Код двигателя}\nОбъём: {Объём}\nМощность: {Мощность}\nПробег: {Пробег}\nТопливо: {Топливо}\nСостояние: {Состояние}\nВ наличии: {Количество} {Единица учёта}\nЦена: {Цена}\nЦена со скидкой: {Цена со скидкой}\n\n{Комментарий}");
         long r=db.createRecord(tid);
         setDemoValue(tid,r,"Название","Двигатель B48B20");
         setDemoValue(tid,r,"Марка автомобиля","BMW");
@@ -184,11 +181,12 @@ public class MainActivity extends Activity {
         setDemoValue(tid,r,"Цена","245000");
         setDemoValue(tid,r,"Скидка","5");
         setDemoValue(tid,r,"Комментарий","Пример: завтра вместо пряжи вы продаёте двигатель — программа использует уже совсем другой набор полей.");
+        db.setRecordQuantity(r,2);
         db.markRecordSaved(r);
     }
 
     private void createPartDemo(long catalogId) {
-        long tid = db.createTemplate(catalogId, "Автозапчасть");
+        long tid = db.createTemplate(catalogId, "Автозапчасть", "шт.");
         addDemoField(tid,"Название",FieldDef.TEXT,true,"","",true,true,"");
         addDemoField(tid,"Категория",FieldDef.SINGLE_CHOICE,false,"","",true,true,"Кузов\nДвигатель\nПодвеска\nЭлектрика\nСалон\nДругое");
         addDemoField(tid,"Артикул / OEM",FieldDef.TEXT,false,"","",true,true,"");
@@ -197,11 +195,10 @@ public class MainActivity extends Activity {
         addDemoField(tid,"Год",FieldDef.INTEGER,false,"","",true,true,"");
         addDemoField(tid,"Сторона",FieldDef.SINGLE_CHOICE,false,"","",false,true,"Левая\nПравая\nПеред\nЗад\nНе применимо");
         addDemoField(tid,"Состояние",FieldDef.SINGLE_CHOICE,false,"","",true,true,"Новая\nБ/у\nВосстановленная");
-        addDemoField(tid,"Количество",FieldDef.INTEGER,false,"шт.","1",true,false,"");
         addDemoField(tid,"Цена",FieldDef.PRICE,false,"₽","",true,true,"");
         addDemoField(tid,"Итого",FieldDef.FORMULA,false,"₽","",true,false,"={Цена}*{Количество}");
         addDemoField(tid,"Фото",FieldDef.PHOTO,false,"","",false,false,"");
-        db.setOutputTemplate(tid,"{Название}\nКатегория: {Категория}\nOEM: {Артикул / OEM}\nМарка/модель: {Марка} {Модель}\nГод: {Год}\nСторона: {Сторона}\nСостояние: {Состояние}\nКоличество: {Количество}\nЦена: {Цена}\nИтого: {Итого}");
+        db.setOutputTemplate(tid,"{Название}\nКатегория: {Категория}\nOEM: {Артикул / OEM}\nМарка/модель: {Марка} {Модель}\nГод: {Год}\nСторона: {Сторона}\nСостояние: {Состояние}\nВ наличии: {Количество} {Единица учёта}\nЦена: {Цена}\nИтого: {Итого}");
         long r=db.createRecord(tid);
         setDemoValue(tid,r,"Название","Фара передняя левая");
         setDemoValue(tid,r,"Категория","Кузов");
@@ -211,8 +208,8 @@ public class MainActivity extends Activity {
         setDemoValue(tid,r,"Год","2021");
         setDemoValue(tid,r,"Сторона","Левая");
         setDemoValue(tid,r,"Состояние","Б/у");
-        setDemoValue(tid,r,"Количество","1");
         setDemoValue(tid,r,"Цена","68000");
+        db.setRecordQuantity(r,10);
         db.markRecordSaved(r);
     }
 
