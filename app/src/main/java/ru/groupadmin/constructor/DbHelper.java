@@ -16,8 +16,12 @@ import java.util.Map;
 public class DbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "group_admin_constructor.db";
     private static final int DB_VERSION = 4;
+    private final Context appContext;
 
-    public DbHelper(Context context) { super(context, DB_NAME, null, DB_VERSION); }
+    public DbHelper(Context context) {
+        super(context.getApplicationContext(), DB_NAME, null, DB_VERSION);
+        appContext = context.getApplicationContext();
+    }
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("PRAGMA foreign_keys=ON");
@@ -99,6 +103,7 @@ public class DbHelper extends SQLiteOpenHelper {
     }
 
     public void deleteCatalog(long id){
+        for(Long recordId:getRecordIdsForCatalog(id)) AppPhotoStore.deleteRecordPhotos(appContext,recordId);
         getWritableDatabase().delete("catalogs","id=?",new String[]{String.valueOf(id)});
     }
 
@@ -162,6 +167,7 @@ public class DbHelper extends SQLiteOpenHelper {
     }
 
     public void deleteTemplate(long id){
+        for(RecordItem r:getRecords(id)) AppPhotoStore.deleteRecordPhotos(appContext,r.id);
         getWritableDatabase().delete("templates","id=?",new String[]{String.valueOf(id)});
     }
 
@@ -353,6 +359,14 @@ public class DbHelper extends SQLiteOpenHelper {
     }
 
     public long createRecord(long templateId){
+        return createRecordInternal(templateId,true);
+    }
+
+    public long createBlankRecord(long templateId){
+        return createRecordInternal(templateId,false);
+    }
+
+    private long createRecordInternal(long templateId,boolean applyDefaults){
         long now=System.currentTimeMillis();
         ContentValues cv=new ContentValues();
         cv.put("template_id",templateId);
@@ -365,7 +379,8 @@ public class DbHelper extends SQLiteOpenHelper {
         for(FieldDef f:getFields(templateId,false)){
             if(FieldDef.AUTO_COUNTER.equals(f.type)){
                 setValue(id,f.id,allocateAutoCounter(f));
-            } else if(!FieldDef.FORMULA.equals(f.type)&&f.defaultValue!=null&&!f.defaultValue.isEmpty()){
+            } else if(applyDefaults && !FieldDef.FORMULA.equals(f.type)
+                    && f.defaultValue!=null&&!f.defaultValue.isEmpty()){
                 setValue(id,f.id,f.defaultValue);
             }
         }
@@ -379,7 +394,12 @@ public class DbHelper extends SQLiteOpenHelper {
         for(Map.Entry<Long,String> e:getValues(recordId).entrySet()){
             FieldDef f=getField(e.getKey());
             if(f!=null && FieldDef.AUTO_COUNTER.equals(f.type)) continue;
-            setValue(id,e.getKey(),e.getValue());
+            if(f!=null && FieldDef.PHOTO.equals(f.type)){
+                String copied=AppPhotoStore.copyPhoto(appContext,e.getValue(),id,f.id);
+                setValue(id,e.getKey(),copied);
+            } else {
+                setValue(id,e.getKey(),e.getValue());
+            }
         }
         setRecordQuantity(id,r.quantity);
         return id;
@@ -514,7 +534,18 @@ public class DbHelper extends SQLiteOpenHelper {
     }
 
     public void deleteRecord(long id){
+        AppPhotoStore.deleteRecordPhotos(appContext,id);
         getWritableDatabase().delete("records","id=?",new String[]{String.valueOf(id)});
+    }
+
+    private List<Long> getRecordIdsForCatalog(long catalogId){
+        List<Long> out=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().rawQuery(
+                "SELECT r.id FROM records r JOIN templates t ON t.id=r.template_id WHERE t.catalog_id=?",
+                new String[]{String.valueOf(catalogId)})){
+            while(c.moveToNext()) out.add(c.getLong(0));
+        }
+        return out;
     }
 
     public void setValue(long recordId,long fieldId,String value){
