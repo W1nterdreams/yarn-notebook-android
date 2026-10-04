@@ -15,14 +15,14 @@ import java.util.Map;
 
 public class DbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "group_admin_constructor.db";
-    private static final int DB_VERSION = 2;
+    private static final int DB_VERSION = 3;
 
     public DbHelper(Context context) { super(context, DB_NAME, null, DB_VERSION); }
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("PRAGMA foreign_keys=ON");
         db.execSQL("CREATE TABLE catalogs (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created_at INTEGER NOT NULL)");
-        db.execSQL("CREATE TABLE templates (id INTEGER PRIMARY KEY AUTOINCREMENT, catalog_id INTEGER NOT NULL, name TEXT NOT NULL, output_template TEXT NOT NULL DEFAULT '', quantity_unit TEXT NOT NULL DEFAULT 'шт.', created_at INTEGER NOT NULL, FOREIGN KEY(catalog_id) REFERENCES catalogs(id) ON DELETE CASCADE)");
+        db.execSQL("CREATE TABLE templates (id INTEGER PRIMARY KEY AUTOINCREMENT, catalog_id INTEGER NOT NULL, name TEXT NOT NULL, output_template TEXT NOT NULL DEFAULT '', quantity_unit TEXT NOT NULL DEFAULT 'шт.', card_field_1 INTEGER NOT NULL DEFAULT 0, card_field_2 INTEGER NOT NULL DEFAULT 0, card_field_3 INTEGER NOT NULL DEFAULT 0, card_field_4 INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, FOREIGN KEY(catalog_id) REFERENCES catalogs(id) ON DELETE CASCADE)");
         db.execSQL("CREATE TABLE fields (id INTEGER PRIMARY KEY AUTOINCREMENT, template_id INTEGER NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL, position INTEGER NOT NULL, required INTEGER NOT NULL DEFAULT 0, unit TEXT NOT NULL DEFAULT '', default_value TEXT NOT NULL DEFAULT '', options_json TEXT NOT NULL DEFAULT '[]', formula TEXT NOT NULL DEFAULT '', show_in_list INTEGER NOT NULL DEFAULT 1, searchable INTEGER NOT NULL DEFAULT 1, archived INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(template_id) REFERENCES templates(id) ON DELETE CASCADE)");
         db.execSQL("CREATE TABLE records (id INTEGER PRIMARY KEY AUTOINCREMENT, template_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'DRAFT', quantity REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY(template_id) REFERENCES templates(id) ON DELETE CASCADE)");
         db.execSQL("CREATE TABLE field_values (record_id INTEGER NOT NULL, field_id INTEGER NOT NULL, value TEXT NOT NULL DEFAULT '', PRIMARY KEY(record_id, field_id), FOREIGN KEY(record_id) REFERENCES records(id) ON DELETE CASCADE, FOREIGN KEY(field_id) REFERENCES fields(id) ON DELETE CASCADE)");
@@ -53,6 +53,31 @@ public class DbHelper extends SQLiteOpenHelper {
                     "WHERE fv.record_id=records.id AND f.name='Количество' LIMIT 1" +
                     "), quantity)");
             db.execSQL("UPDATE fields SET archived=1 WHERE name='Количество'");
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE templates ADD COLUMN card_field_1 INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE templates ADD COLUMN card_field_2 INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE templates ADD COLUMN card_field_3 INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE templates ADD COLUMN card_field_4 INTEGER NOT NULL DEFAULT 0");
+
+            // Для существующих типов товаров берём первые четыре поля,
+            // которые раньше были отмечены для показа в списке.
+            db.execSQL("UPDATE templates SET card_field_1 = COALESCE((" +
+                    "SELECT f.id FROM fields f WHERE f.template_id=templates.id " +
+                    "AND f.archived=0 AND f.show_in_list=1 AND f.type<>'PHOTO' " +
+                    "ORDER BY f.position,f.id LIMIT 1 OFFSET 0),0)");
+            db.execSQL("UPDATE templates SET card_field_2 = COALESCE((" +
+                    "SELECT f.id FROM fields f WHERE f.template_id=templates.id " +
+                    "AND f.archived=0 AND f.show_in_list=1 AND f.type<>'PHOTO' " +
+                    "ORDER BY f.position,f.id LIMIT 1 OFFSET 1),0)");
+            db.execSQL("UPDATE templates SET card_field_3 = COALESCE((" +
+                    "SELECT f.id FROM fields f WHERE f.template_id=templates.id " +
+                    "AND f.archived=0 AND f.show_in_list=1 AND f.type<>'PHOTO' " +
+                    "ORDER BY f.position,f.id LIMIT 1 OFFSET 2),0)");
+            db.execSQL("UPDATE templates SET card_field_4 = COALESCE((" +
+                    "SELECT f.id FROM fields f WHERE f.template_id=templates.id " +
+                    "AND f.archived=0 AND f.show_in_list=1 AND f.type<>'PHOTO' " +
+                    "ORDER BY f.position,f.id LIMIT 1 OFFSET 3),0)");
         }
     }
 
@@ -112,6 +137,10 @@ public class DbHelper extends SQLiteOpenHelper {
         cv.put("name",name.trim());
         cv.put("output_template","");
         cv.put("quantity_unit",normalizeUnit(quantityUnit));
+        cv.put("card_field_1",0);
+        cv.put("card_field_2",0);
+        cv.put("card_field_3",0);
+        cv.put("card_field_4",0);
         cv.put("created_at",System.currentTimeMillis());
         return getWritableDatabase().insertOrThrow("templates",null,cv);
     }
@@ -135,7 +164,7 @@ public class DbHelper extends SQLiteOpenHelper {
     public List<CardTemplate> getTemplates(long catalogId){
         List<CardTemplate> out=new ArrayList<>();
         try(Cursor c=getReadableDatabase().rawQuery(
-                "SELECT id,catalog_id,name,output_template,quantity_unit,created_at FROM templates WHERE catalog_id=? ORDER BY created_at ASC",
+                "SELECT id,catalog_id,name,output_template,quantity_unit,card_field_1,card_field_2,card_field_3,card_field_4,created_at FROM templates WHERE catalog_id=? ORDER BY created_at ASC",
                 new String[]{String.valueOf(catalogId)})){
             while(c.moveToNext()) out.add(templateFrom(c));
         }
@@ -144,7 +173,7 @@ public class DbHelper extends SQLiteOpenHelper {
 
     public CardTemplate getTemplate(long id){
         try(Cursor c=getReadableDatabase().rawQuery(
-                "SELECT id,catalog_id,name,output_template,quantity_unit,created_at FROM templates WHERE id=?",
+                "SELECT id,catalog_id,name,output_template,quantity_unit,card_field_1,card_field_2,card_field_3,card_field_4,created_at FROM templates WHERE id=?",
                 new String[]{String.valueOf(id)})){
             return c.moveToFirst()?templateFrom(c):null;
         }
@@ -157,13 +186,26 @@ public class DbHelper extends SQLiteOpenHelper {
         x.name=c.getString(2);
         x.outputTemplate=c.getString(3);
         x.quantityUnit=c.getString(4);
-        x.createdAt=c.getLong(5);
+        x.cardField1=c.getLong(5);
+        x.cardField2=c.getLong(6);
+        x.cardField3=c.getLong(7);
+        x.cardField4=c.getLong(8);
+        x.createdAt=c.getLong(9);
         return x;
     }
 
     public void setOutputTemplate(long templateId,String text){
         ContentValues cv=new ContentValues();
         cv.put("output_template",text==null?"":text);
+        getWritableDatabase().update("templates",cv,"id=?",new String[]{String.valueOf(templateId)});
+    }
+
+    public void setCardFields(long templateId,long field1,long field2,long field3,long field4){
+        ContentValues cv=new ContentValues();
+        cv.put("card_field_1",field1);
+        cv.put("card_field_2",field2);
+        cv.put("card_field_3",field3);
+        cv.put("card_field_4",field4);
         getWritableDatabase().update("templates",cv,"id=?",new String[]{String.valueOf(templateId)});
     }
 
