@@ -25,9 +25,10 @@ public class FieldEditActivity extends Activity {
     private long fieldId;
     private FieldDef original;
     private EditText name, unit, def, options, formula;
+    private EditText counterPrefix, counterSuffix, counterStart, counterStep, counterDigits, counterNext;
     private Spinner type;
     private CheckBox required, showInList, searchable;
-    private LinearLayout optionsBox, formulaBox, repeatBox, repeatList, unitBox, defaultBox;
+    private LinearLayout optionsBox, formulaBox, repeatBox, repeatList, counterBox, unitBox, defaultBox;
     private String[] types;
     private final List<GroupSubEditor> groupEditors = new ArrayList<>();
 
@@ -129,6 +130,58 @@ public class FieldEditActivity extends Activity {
         addSub.setOnClickListener(v -> addGroupSubfield("", FieldDef.TEXT, ""));
         form.addView(repeatBox);
 
+        counterBox = new LinearLayout(this);
+        counterBox.setOrientation(LinearLayout.VERTICAL);
+        counterBox.addView(label("Автоматическая нумерация"));
+
+        LinearLayout counterHint = Ui.infoCard(this, Ui.PRIMARY_SOFT, Ui.BORDER);
+        counterHint.addView(Ui.text(this,
+                "Номер присваивается автоматически при создании товара и больше не редактируется. Можно сделать простой № 1, 2, 3 или артикул вида ART-0001.",
+                13, Ui.PRIMARY_DARK, false));
+        counterBox.addView(counterHint);
+
+        counterPrefix = input("Префикс, например ART-", false);
+        counterSuffix = input("Суффикс, например -VK", false);
+        counterStart = input("Начать с", false);
+        counterStep = input("Шаг", false);
+        counterDigits = input("Минимум цифр", false);
+        counterNext = input("Следующий номер", false);
+
+        counterStart.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        counterStep.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        counterDigits.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        counterNext.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+
+        counterBox.addView(label("Префикс"));
+        counterBox.addView(counterPrefix);
+        counterBox.addView(label("Суффикс"));
+        counterBox.addView(counterSuffix);
+
+        LinearLayout counterNums1 = Ui.row(this);
+        LinearLayout startBox = new LinearLayout(this); startBox.setOrientation(LinearLayout.VERTICAL);
+        startBox.addView(label("Начать с")); startBox.addView(counterStart);
+        LinearLayout stepBox = new LinearLayout(this); stepBox.setOrientation(LinearLayout.VERTICAL);
+        stepBox.addView(label("Шаг")); stepBox.addView(counterStep);
+        counterNums1.addView(startBox,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
+        counterNums1.addView(Ui.hSpacer(this,6));
+        counterNums1.addView(stepBox,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
+        counterBox.addView(counterNums1);
+
+        LinearLayout counterNums2 = Ui.row(this);
+        LinearLayout digitsBox = new LinearLayout(this); digitsBox.setOrientation(LinearLayout.VERTICAL);
+        digitsBox.addView(label("Минимум цифр")); digitsBox.addView(counterDigits);
+        LinearLayout nextBox = new LinearLayout(this); nextBox.setOrientation(LinearLayout.VERTICAL);
+        nextBox.addView(label("Следующий номер")); nextBox.addView(counterNext);
+        counterNums2.addView(digitsBox,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
+        counterNums2.addView(Ui.hSpacer(this,6));
+        counterNums2.addView(nextBox,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
+        counterBox.addView(counterNums2);
+
+        counterBox.addView(Ui.text(this,
+                "Пример: префикс ART-, число 1 и 4 цифры → ART-0001. Удалённые номера повторно не используются.",
+                12, Ui.MUTED, false));
+        form.addView(counterBox);
+
         formulaBox = new LinearLayout(this);
         formulaBox.setOrientation(LinearLayout.VERTICAL);
         formulaBox.addView(label("Формула"));
@@ -187,6 +240,14 @@ public class FieldEditActivity extends Activity {
             for(RepeatGroup.SubField s : RepeatGroup.parseConfig(original.optionsJson)) {
                 addGroupSubfield(s.name, s.type, s.unit);
             }
+        } else if(FieldDef.AUTO_COUNTER.equals(original.type)) {
+            AutoCounter.Config cfg=AutoCounter.parse(original.optionsJson);
+            counterPrefix.setText(cfg.prefix);
+            counterSuffix.setText(cfg.suffix);
+            counterStart.setText(String.valueOf(cfg.start));
+            counterStep.setText(String.valueOf(cfg.step));
+            counterDigits.setText(String.valueOf(cfg.digits));
+            counterNext.setText(String.valueOf(db.getCounterNext(original.id)));
         } else {
             try{
                 JSONArray a=new JSONArray(original.optionsJson);
@@ -205,15 +266,25 @@ public class FieldEditActivity extends Activity {
         boolean choices=FieldDef.SINGLE_CHOICE.equals(t)||FieldDef.MULTI_CHOICE.equals(t);
         boolean repeat=FieldDef.REPEAT_GROUP.equals(t);
         boolean formulaType=FieldDef.FORMULA.equals(t);
+        boolean counterType=FieldDef.AUTO_COUNTER.equals(t);
 
         optionsBox.setVisibility(choices?View.VISIBLE:View.GONE);
         repeatBox.setVisibility(repeat?View.VISIBLE:View.GONE);
+        counterBox.setVisibility(counterType?View.VISIBLE:View.GONE);
         formulaBox.setVisibility(formulaType?View.VISIBLE:View.GONE);
-        unitBox.setVisibility(repeat?View.GONE:View.VISIBLE);
-        defaultBox.setVisibility((formulaType||repeat)?View.GONE:View.VISIBLE);
+        unitBox.setVisibility((repeat||counterType)?View.GONE:View.VISIBLE);
+        defaultBox.setVisibility((formulaType||repeat||counterType)?View.GONE:View.VISIBLE);
 
-        required.setEnabled(!formulaType);
+        required.setEnabled(!formulaType&&!counterType);
+        if(counterType) required.setChecked(false);
         searchable.setEnabled(!FieldDef.PHOTO.equals(t));
+
+        if(counterType && counterStart.getText().toString().trim().isEmpty()){
+            counterStart.setText("1");
+            counterStep.setText("1");
+            counterDigits.setText("0");
+            counterNext.setText("1");
+        }
 
         if(repeat && groupEditors.isEmpty()) {
             addGroupSubfield("Значение", FieldDef.TEXT, "");
@@ -275,6 +346,8 @@ public class FieldEditActivity extends Activity {
         f.searchable=searchable.isChecked();
         f.formula=formula.getText().toString().trim();
 
+        long desiredCounterNext=-1;
+
         if(FieldDef.REPEAT_GROUP.equals(t)) {
             List<RepeatGroup.SubField> cfg = new ArrayList<>();
             Set<String> names = new HashSet<>();
@@ -295,6 +368,25 @@ public class FieldEditActivity extends Activity {
             f.unit="";
             f.defaultValue="";
             f.formula="";
+        } else if(FieldDef.AUTO_COUNTER.equals(t)) {
+            AutoCounter.Config cfg=new AutoCounter.Config();
+            cfg.prefix=counterPrefix.getText().toString();
+            cfg.suffix=counterSuffix.getText().toString();
+            try{cfg.start=Long.parseLong(counterStart.getText().toString().trim());}catch(Exception e){toast("Неверное начальное число");return;}
+            try{cfg.step=Long.parseLong(counterStep.getText().toString().trim());}catch(Exception e){toast("Неверный шаг");return;}
+            try{cfg.digits=Integer.parseInt(counterDigits.getText().toString().trim());}catch(Exception e){toast("Неверное количество цифр");return;}
+            try{desiredCounterNext=Long.parseLong(counterNext.getText().toString().trim());}catch(Exception e){desiredCounterNext=cfg.start;}
+
+            if(cfg.start<0){toast("Начальное число не может быть отрицательным");return;}
+            if(cfg.step<=0){toast("Шаг должен быть больше нуля");return;}
+            if(cfg.digits<0||cfg.digits>18){toast("Количество цифр: от 0 до 18");return;}
+            if(desiredCounterNext<0){toast("Следующий номер не может быть отрицательным");return;}
+
+            f.optionsJson=AutoCounter.encode(cfg);
+            f.unit="";
+            f.defaultValue="";
+            f.formula="";
+            f.required=false;
         } else {
             JSONArray a=new JSONArray();
             for(String line:options.getText().toString().split("\\r?\\n")){
@@ -304,7 +396,15 @@ public class FieldEditActivity extends Activity {
             f.optionsJson=a.toString();
         }
 
-        db.saveField(f);
+        long savedId=db.saveField(f);
+        if(FieldDef.AUTO_COUNTER.equals(t)){
+            if(desiredCounterNext<0){
+                AutoCounter.Config cfg=AutoCounter.parse(f.optionsJson);
+                desiredCounterNext=cfg.start;
+            }
+            db.setCounterNext(savedId,desiredCounterNext);
+            db.ensureAutoCounterValues(savedId);
+        }
         toast("Поле сохранено");
         finish();
     }
