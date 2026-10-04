@@ -327,7 +327,7 @@ public class RecordEditActivity extends Activity {
         minus.setTextSize(22);
         plus.setTextSize(20);
         row.addView(minus,new LinearLayout.LayoutParams(Ui.dp(this,58),Ui.dp(this,50)));
-        row.addView(Ui.spacer(this,7));
+        row.addView(Ui.hSpacer(this,7));
         row.addView(plus,new LinearLayout.LayoutParams(Ui.dp(this,58),Ui.dp(this,50)));
 
         stock.addView(row);
@@ -469,14 +469,19 @@ public class RecordEditActivity extends Activity {
         super.onActivityResult(req,res,data);
         if(req==REQ_PHOTO&&res==RESULT_OK&&data!=null&&data.getData()!=null){
             Uri uri=data.getData();
-            try{
-                getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            }catch(Exception ignored){}
             FieldWidget w=widgets.get(pendingPhotoFieldId);
             if(w!=null){
-                w.raw=uri.toString();
-                showPhoto(w);
-                changed();
+                try{
+                    String stored=AppPhotoStore.importPhoto(
+                            this,uri,recordId,pendingPhotoFieldId,w.raw);
+                    w.raw=stored;
+                    db.setValue(recordId,pendingPhotoFieldId,stored);
+                    showPhoto(w);
+                    changed();
+                    toast("Фото скопировано в папку приложения");
+                }catch(Exception e){
+                    toast("Не удалось сохранить фото: "+e.getMessage());
+                }
             }
         }
     }
@@ -487,8 +492,13 @@ public class RecordEditActivity extends Activity {
             w.image.setImageDrawable(null);
             return;
         }
-        try{w.image.setImageURI(Uri.parse(w.raw));}
-        catch(Exception e){w.image.setImageDrawable(null);}
+        try{
+            Uri uri=AppPhotoStore.displayUri(w.raw);
+            if(uri==null) w.image.setImageDrawable(null);
+            else w.image.setImageURI(uri);
+        }catch(Exception e){
+            w.image.setImageDrawable(null);
+        }
     }
 
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
