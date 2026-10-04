@@ -1,10 +1,10 @@
+plugins {
+    id 'com.android.application'
+}
+
 def vkidClientSecret = System.getenv('VKID_CLIENT_SECRET')
 if (!vkidClientSecret) {
     vkidClientSecret = project.findProperty('VKIDClientSecret') ?: 'NOT_CONFIGURED'
-}
-
-plugins {
-    id 'com.android.application'
 }
 
 android {
