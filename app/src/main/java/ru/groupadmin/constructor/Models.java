@@ -12,6 +12,10 @@ final class CardTemplate {
     String name;
     String outputTemplate;
     String quantityUnit;
+    long cardField1;
+    long cardField2;
+    long cardField3;
+    long cardField4;
     long createdAt;
 }
 
