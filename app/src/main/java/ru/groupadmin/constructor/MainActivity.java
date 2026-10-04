@@ -32,7 +32,7 @@ public class MainActivity extends Activity {
     private void render() {
         LinearLayout root = Ui.page(this);
         root.addView(Ui.title(this, "Конструктор товаров"));
-        root.addView(Ui.subtitle(this, "Сегодня пряжа, завтра двигатель или запчасти: создавайте сколько угодно типов карточек, каждый со своими полями, вариантами ввода, формулами и шаблоном вывода."));
+        root.addView(Ui.subtitle(this, "Сегодня пряжа, завтра двигатель или запчасти: создавайте сколько угодно типов товаров, каждый со своими полями, вариантами ввода, формулами и шаблоном вывода."));
 
         LinearLayout actions=Ui.row(this);
         android.widget.Button add=Ui.primaryButton(this,"＋ Новая база");
@@ -68,7 +68,7 @@ public class MainActivity extends Activity {
         for(Catalog c:catalogs) {
             LinearLayout card=Ui.card(this);
             card.addView(Ui.text(this,c.name,19,Ui.TEXT,true));
-            card.addView(Ui.text(this,"Типов карточек: "+db.countTemplates(c.id)+" · карточек: "+db.countRecordsForCatalog(c.id),13,Ui.MUTED,false));
+            card.addView(Ui.text(this,"Типов товара: "+db.countTemplates(c.id)+" · товаров: "+db.countRecordsForCatalog(c.id),13,Ui.MUTED,false));
             LinearLayout row=Ui.row(this);
             android.widget.Button open=Ui.primaryButton(this,"Открыть");
             android.widget.Button rename=Ui.button(this,"Название");
@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
 
     private void confirmDelete(Catalog c) {
         new AlertDialog.Builder(this).setTitle("Удалить базу?")
-                .setMessage("Будут удалены все типы карточек, поля и записи базы «"+c.name+"». Отменить это нельзя.")
+                .setMessage("Будут удалены все типы товаров, поля и записи базы «"+c.name+"». Отменить это нельзя.")
                 .setPositiveButton("Удалить",(d,w)->{db.deleteCatalog(c.id);refreshList();})
                 .setNegativeButton("Отмена",null).show();
     }
@@ -117,7 +117,7 @@ public class MainActivity extends Activity {
         createYarnDemo(catalogId);
         createEngineDemo(catalogId);
         createPartDemo(catalogId);
-        toast("Созданы три совершенно разных типа карточек: пряжа, двигатель и запчасть");
+        toast("Созданы три совершенно разных типа товаров: пряжа, двигатель и запчасть");
         openCatalog(catalogId);
     }
 
@@ -125,7 +125,7 @@ public class MainActivity extends Activity {
         long tid = db.createTemplate(catalogId, "Пряжа");
         addDemoField(tid,"Название",FieldDef.TEXT,true,"","",true,true,"");
         addDemoField(tid,"Производитель",FieldDef.TEXT,false,"","",true,true,"");
-        addDemoField(tid,"Состав",FieldDef.MULTILINE,false,"","",true,true,"");
+        addDemoField(tid,"Состав",FieldDef.REPEAT_GROUP,false,"","",true,true,RepeatGroup.compositionConfig());
         addDemoField(tid,"Метраж",FieldDef.DECIMAL,false,"м/100 г","",true,true,"");
         addDemoField(tid,"Цвет",FieldDef.TEXT,false,"","",true,true,"");
         addDemoField(tid,"Цена за кг",FieldDef.PRICE,false,"₽/кг","",true,true,"");
@@ -137,12 +137,12 @@ public class MainActivity extends Activity {
         long r=db.createRecord(tid);
         setDemoValue(tid,r,"Название","Cariaggi Cashmere");
         setDemoValue(tid,r,"Производитель","Cariaggi");
-        setDemoValue(tid,r,"Состав","100% кашемир");
+        setDemoValue(tid,r,"Состав","[{\\\"Материал\\\":\\\"Кашемир\\\",\\\"Доля\\\":\\\"100\\\"}]");
         setDemoValue(tid,r,"Метраж","1400");
         setDemoValue(tid,r,"Цвет","Графит");
         setDemoValue(tid,r,"Цена за кг","8200");
         setDemoValue(tid,r,"Вес","350");
-        setDemoValue(tid,r,"Описание","Пример карточки для пряжи. Все поля можно переименовать, удалить или дополнить.");
+        setDemoValue(tid,r,"Описание","Пример товара для пряжи. Все поля можно переименовать, удалить или дополнить.");
         db.markRecordSaved(r);
     }
 
@@ -214,7 +214,7 @@ public class MainActivity extends Activity {
 
     private void addDemoField(long tid,String name,String type,boolean req,String unit,String def,boolean list,boolean search,String extra){
         FieldDef f=new FieldDef();f.templateId=tid;f.name=name;f.type=type;f.required=req;f.unit=unit;f.defaultValue=def;f.showInList=list;f.searchable=search;
-        if(FieldDef.FORMULA.equals(type))f.formula=extra; else if(FieldDef.SINGLE_CHOICE.equals(type)||FieldDef.MULTI_CHOICE.equals(type)){
+        if(FieldDef.FORMULA.equals(type))f.formula=extra; else if(FieldDef.REPEAT_GROUP.equals(type))f.optionsJson=extra; else if(FieldDef.SINGLE_CHOICE.equals(type)||FieldDef.MULTI_CHOICE.equals(type)){
             org.json.JSONArray a=new org.json.JSONArray(); for(String x:extra.split("\\n")) if(!x.trim().isEmpty())a.put(x.trim()); f.optionsJson=a.toString();
         }
         db.saveField(f);
