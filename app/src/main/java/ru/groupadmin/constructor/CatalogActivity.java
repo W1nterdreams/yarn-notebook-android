@@ -18,33 +18,64 @@ public class CatalogActivity extends Activity {
     private LinearLayout list;
     private Catalog catalog;
 
-    @Override public void onCreate(Bundle b){super.onCreate(b);db=new DbHelper(this);catalogId=getIntent().getLongExtra("catalog_id",0);render();}
-    @Override protected void onResume(){super.onResume();if(list!=null)refresh();}
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);
+        db=new DbHelper(this);
+        catalogId=getIntent().getLongExtra("catalog_id",0);
+        render();
+    }
+
+    @Override protected void onResume(){
+        super.onResume();
+        if(list!=null)refresh();
+    }
 
     private void render(){
-        catalog=db.getCatalog(catalogId); if(catalog==null){finish();return;}
+        catalog=db.getCatalog(catalogId);
+        if(catalog==null){finish();return;}
+
         LinearLayout root=Ui.page(this);
         android.widget.Button back=Ui.outlineButton(this,"← Базы");
         back.setOnClickListener(v->finish());
         root.addView(back,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,44)));
 
         root.addView(Ui.title(this,catalog.name));
-        root.addView(Ui.subtitle(this,"Здесь хранятся разные типы товаров. У каждого типа свой набор полей, формул и шаблон вывода."));
+        root.addView(Ui.subtitle(this,
+                "Каждый тип товара имеет свои поля и свою единицу складского учёта: шт., кг, м, л и т. д."));
 
         android.widget.Button add=Ui.primaryButton(this,"＋ Создать тип товара");
         root.addView(add,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,52)));
         root.addView(Ui.spacer(this,6));
+
         android.widget.Button export=Ui.outlineButton(this,"Экспортировать базу в JSON");
         root.addView(export,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,46)));
         root.addView(Ui.sectionTitle(this,"ТИПЫ ТОВАРОВ"));
 
-        list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);root.addView(Ui.scroll(this,list),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1));setContentView(root);
-        add.setOnClickListener(v->newTemplate());export.setOnClickListener(v->exportCatalog());refresh();
+        list=new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        root.addView(Ui.scroll(this,list),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1));
+        setContentView(root);
+
+        add.setOnClickListener(v->newTemplate());
+        export.setOnClickListener(v->exportCatalog());
+        refresh();
     }
 
     private void refresh(){
-        catalog=db.getCatalog(catalogId);list.removeAllViews();List<CardTemplate> ts=db.getTemplates(catalogId);
-        if(ts.isEmpty()){LinearLayout c=Ui.card(this);c.addView(Ui.text(this,"Нет типов товаров",18,Ui.TEXT,true));c.addView(Ui.text(this,"Например: «Пряжа», «Двигатель», «Автозапчасть», «Одежда». Для каждого типа задаётся независимый набор полей, формул и шаблон вывода.",14,Ui.MUTED,false));list.addView(c);return;}
+        catalog=db.getCatalog(catalogId);
+        list.removeAllViews();
+        List<CardTemplate> ts=db.getTemplates(catalogId);
+
+        if(ts.isEmpty()){
+            LinearLayout c=Ui.infoCard(this,Ui.PRIMARY_SOFT,Ui.BORDER);
+            c.addView(Ui.text(this,"Нет типов товаров",18,Ui.PRIMARY_DARK,true));
+            c.addView(Ui.text(this,
+                    "Создайте, например, «Пряжа», «Двигатель» или «Колёса». Для каждого типа отдельно задаются поля и единица учёта.",
+                    14,Ui.MUTED,false));
+            list.addView(c);
+            return;
+        }
+
         for(CardTemplate t:ts){
             LinearLayout c=Ui.card(this);
             c.addView(Ui.text(this,t.name,19,Ui.TEXT,true));
@@ -55,6 +86,8 @@ public class CatalogActivity extends Activity {
             stats.addView(Ui.badge(this,"Товаров: "+db.countRecords(t.id),Ui.SUCCESS,Ui.SUCCESS_BG));
             c.addView(Ui.spacer(this,9));
             c.addView(stats);
+            c.addView(Ui.spacer(this,6));
+            c.addView(Ui.badge(this,"Учёт: "+t.quantityUnit,Ui.DRAFT,Ui.DRAFT_BG));
             c.addView(Ui.spacer(this,10));
 
             LinearLayout r=Ui.row(this);
@@ -63,24 +96,135 @@ public class CatalogActivity extends Activity {
             r.addView(open,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1.2f));
             r.addView(fields,new LinearLayout.LayoutParams(0,Ui.dp(this,46),1));
             c.addView(r);
-            c.addView(Ui.spacer(this,6));
 
+            c.addView(Ui.spacer(this,6));
             LinearLayout r2=Ui.row(this);
-            android.widget.Button rename=Ui.outlineButton(this,"Переименовать");
+            android.widget.Button settings=Ui.outlineButton(this,"Настройки");
             android.widget.Button del=Ui.dangerButton(this,"Удалить тип");
-            r2.addView(rename,new LinearLayout.LayoutParams(0,Ui.dp(this,44),1));
+            r2.addView(settings,new LinearLayout.LayoutParams(0,Ui.dp(this,44),1));
             r2.addView(del,new LinearLayout.LayoutParams(0,Ui.dp(this,44),1));
             c.addView(r2);
-            open.setOnClickListener(v->openTemplate(t.id));fields.setOnClickListener(v->openFields(t.id));rename.setOnClickListener(v->rename(t));del.setOnClickListener(v->delete(t));list.addView(c);
+
+            open.setOnClickListener(v->openTemplate(t.id));
+            fields.setOnClickListener(v->openFields(t.id));
+            settings.setOnClickListener(v->editTemplateSettings(t));
+            del.setOnClickListener(v->delete(t));
+            list.addView(c);
         }
     }
 
-    private void newTemplate(){EditText e=new EditText(this);e.setHint("Например: Товар");new AlertDialog.Builder(this).setTitle("Новый тип товара").setView(e).setPositiveButton("Создать",(d,w)->{String n=e.getText().toString().trim();if(n.isEmpty())return;long id=db.createTemplate(catalogId,n);openFields(id);}).setNegativeButton("Отмена",null).show();}
-    private void rename(CardTemplate t){EditText e=new EditText(this);e.setText(t.name);e.setSelection(e.length());new AlertDialog.Builder(this).setTitle("Название типа").setView(e).setPositiveButton("Сохранить",(d,w)->{String n=e.getText().toString().trim();if(!n.isEmpty()){db.renameTemplate(t.id,n);refresh();}}).setNegativeButton("Отмена",null).show();}
-    private void delete(CardTemplate t){new AlertDialog.Builder(this).setTitle("Удалить тип товара?").setMessage("Будут удалены его поля и все товары этого типа.").setPositiveButton("Удалить",(d,w)->{db.deleteTemplate(t.id);refresh();}).setNegativeButton("Отмена",null).show();}
-    private void openTemplate(long id){Intent i=new Intent(this,TemplateActivity.class);i.putExtra("template_id",id);startActivity(i);}
-    private void openFields(long id){Intent i=new Intent(this,FieldsActivity.class);i.putExtra("template_id",id);startActivity(i);}
+    private LinearLayout settingsForm(EditText name, EditText unit){
+        LinearLayout box=new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int p=Ui.dp(this,18);
+        box.setPadding(p,Ui.dp(this,4),p,0);
 
-    private void exportCatalog(){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,BackupManager.safeFileName(catalog.name)+".json");startActivityForResult(i,REQ_EXPORT);}
-    @Override protected void onActivityResult(int req,int res,Intent data){super.onActivityResult(req,res,data);if(req==REQ_EXPORT&&res==RESULT_OK&&data!=null&&data.getData()!=null){try{BackupManager.exportCatalog(this,db,catalogId,data.getData());Toast.makeText(this,"Экспорт готов",Toast.LENGTH_LONG).show();}catch(Exception e){Toast.makeText(this,"Ошибка экспорта: "+e.getMessage(),Toast.LENGTH_LONG).show();}}}
+        box.addView(Ui.text(this,"Название типа товара",13,Ui.MUTED,true));
+        name.setSingleLine(true);
+        name.setBackground(Ui.inputBackground(this));
+        name.setPadding(Ui.dp(this,12),Ui.dp(this,10),Ui.dp(this,12),Ui.dp(this,10));
+        LinearLayout.LayoutParams lp1=new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,52));
+        lp1.setMargins(0,Ui.dp(this,5),0,Ui.dp(this,12));
+        box.addView(name,lp1);
+
+        box.addView(Ui.text(this,"Единица складского учёта",13,Ui.MUTED,true));
+        unit.setSingleLine(true);
+        unit.setHint("шт., кг, г, м, л, уп. …");
+        unit.setBackground(Ui.inputBackground(this));
+        unit.setPadding(Ui.dp(this,12),Ui.dp(this,10),Ui.dp(this,12),Ui.dp(this,10));
+        LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,Ui.dp(this,52));
+        lp2.setMargins(0,Ui.dp(this,5),0,0);
+        box.addView(unit,lp2);
+
+        return box;
+    }
+
+    private void newTemplate(){
+        EditText name=new EditText(this);
+        name.setHint("Например: Колёса");
+        EditText unit=new EditText(this);
+        unit.setText("шт.");
+        unit.setSelection(unit.length());
+
+        new AlertDialog.Builder(this)
+                .setTitle("Новый тип товара")
+                .setMessage("Количество есть у каждого товара всегда. Здесь задаётся, в чём оно измеряется.")
+                .setView(settingsForm(name,unit))
+                .setPositiveButton("Создать",(d,w)->{
+                    String n=name.getText().toString().trim();
+                    String u=unit.getText().toString().trim();
+                    if(n.isEmpty()){Toast.makeText(this,"Введите название",Toast.LENGTH_SHORT).show();return;}
+                    long id=db.createTemplate(catalogId,n,u);
+                    openFields(id);
+                })
+                .setNegativeButton("Отмена",null)
+                .show();
+    }
+
+    private void editTemplateSettings(CardTemplate t){
+        EditText name=new EditText(this);
+        name.setText(t.name);
+        name.setSelection(name.length());
+
+        EditText unit=new EditText(this);
+        unit.setText(t.quantityUnit);
+        unit.setSelection(unit.length());
+
+        new AlertDialog.Builder(this)
+                .setTitle("Настройки типа товара")
+                .setMessage("Единица применяется к встроенному остатку каждого товара.")
+                .setView(settingsForm(name,unit))
+                .setPositiveButton("Сохранить",(d,w)->{
+                    String n=name.getText().toString().trim();
+                    String u=unit.getText().toString().trim();
+                    if(!n.isEmpty()){
+                        db.setTemplateSettings(t.id,n,u);
+                        refresh();
+                    }
+                })
+                .setNegativeButton("Отмена",null)
+                .show();
+    }
+
+    private void delete(CardTemplate t){
+        new AlertDialog.Builder(this)
+                .setTitle("Удалить тип товара?")
+                .setMessage("Будут удалены его поля и все товары этого типа.")
+                .setPositiveButton("Удалить",(d,w)->{db.deleteTemplate(t.id);refresh();})
+                .setNegativeButton("Отмена",null)
+                .show();
+    }
+
+    private void openTemplate(long id){
+        Intent i=new Intent(this,TemplateActivity.class);
+        i.putExtra("template_id",id);
+        startActivity(i);
+    }
+
+    private void openFields(long id){
+        Intent i=new Intent(this,FieldsActivity.class);
+        i.putExtra("template_id",id);
+        startActivity(i);
+    }
+
+    private void exportCatalog(){
+        Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        i.setType("application/json");
+        i.putExtra(Intent.EXTRA_TITLE,BackupManager.safeFileName(catalog.name)+".json");
+        startActivityForResult(i,REQ_EXPORT);
+    }
+
+    @Override protected void onActivityResult(int req,int res,Intent data){
+        super.onActivityResult(req,res,data);
+        if(req==REQ_EXPORT&&res==RESULT_OK&&data!=null&&data.getData()!=null){
+            try{
+                BackupManager.exportCatalog(this,db,catalogId,data.getData());
+                Toast.makeText(this,"Экспорт готов",Toast.LENGTH_LONG).show();
+            }catch(Exception e){
+                Toast.makeText(this,"Ошибка экспорта: "+e.getMessage(),Toast.LENGTH_LONG).show();
+            }
+        }
+    }
 }
