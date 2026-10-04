@@ -22,7 +22,7 @@ final class BackupManager {
 
         JSONObject root = new JSONObject();
         root.put("format", "group-admin-constructor");
-        root.put("version", 1);
+        root.put("version", 2);
         root.put("exported_at", System.currentTimeMillis());
         JSONObject jc = new JSONObject();
         jc.put("name", c.name);
@@ -31,6 +31,7 @@ final class BackupManager {
             JSONObject jt = new JSONObject();
             jt.put("name", t.name);
             jt.put("output_template", t.outputTemplate == null ? "" : t.outputTemplate);
+            jt.put("quantity_unit", t.quantityUnit == null ? "шт." : t.quantityUnit);
             JSONArray fields = new JSONArray();
             List<FieldDef> defs = db.getFields(t.id, true);
             for (FieldDef f : defs) {
@@ -55,6 +56,7 @@ final class BackupManager {
             for (RecordItem r : db.getRecords(t.id)) {
                 JSONObject jr = new JSONObject();
                 jr.put("status", r.status);
+                jr.put("quantity", r.quantity);
                 jr.put("created_at", r.createdAt);
                 jr.put("updated_at", r.updatedAt);
                 JSONObject vals = new JSONObject();
@@ -92,7 +94,7 @@ final class BackupManager {
         if (templates == null) return catalogId;
         for (int ti = 0; ti < templates.length(); ti++) {
             JSONObject jt = templates.getJSONObject(ti);
-            long templateId = db.createTemplate(catalogId, jt.optString("name", "Тип товара"));
+            long templateId = db.createTemplate(catalogId, jt.optString("name", "Тип товара"), jt.optString("quantity_unit", "шт."));
             db.setOutputTemplate(templateId, jt.optString("output_template", ""));
             Map<Long, Long> fieldMap = new HashMap<>();
             JSONArray fields = jt.optJSONArray("fields");
@@ -132,6 +134,7 @@ final class BackupManager {
                             if (newId != null) db.setValue(recordId, newId, vals.optString(k, ""));
                         }
                     }
+                    db.setRecordQuantity(recordId, jr.optDouble("quantity", 0));
                     if ("SAVED".equals(jr.optString("status"))) db.markRecordSaved(recordId);
                 }
             }
