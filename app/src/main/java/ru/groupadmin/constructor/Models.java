@@ -32,6 +32,7 @@ final class FieldDef {
     static final String PHOTO = "PHOTO";
     static final String FORMULA = "FORMULA";
     static final String REPEAT_GROUP = "REPEAT_GROUP";
+    static final String AUTO_COUNTER = "AUTO_COUNTER";
 
     long id;
     long templateId;
@@ -59,12 +60,13 @@ final class FieldDef {
         if (PHOTO.equals(type)) return "Фотография";
         if (FORMULA.equals(type)) return "Формула";
         if (REPEAT_GROUP.equals(type)) return "Повторяемая группа";
+        if (AUTO_COUNTER.equals(type)) return "Автосчётчик";
         return "Текст";
     }
 
     static String[] allTypes() {
         return new String[]{TEXT, MULTILINE, INTEGER, DECIMAL, PRICE, CHECKBOX, DATE,
-                SINGLE_CHOICE, MULTI_CHOICE, REPEAT_GROUP, PHOTO, FORMULA};
+                SINGLE_CHOICE, MULTI_CHOICE, REPEAT_GROUP, AUTO_COUNTER, PHOTO, FORMULA};
     }
 }
 
