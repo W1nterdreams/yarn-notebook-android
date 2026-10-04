@@ -121,7 +121,15 @@ public class RecordEditActivity extends Activity {
     private FieldWidget createWidget(FieldDef f,String raw){
         FieldWidget w=new FieldWidget(f);
 
-        if(FieldDef.CHECKBOX.equals(f.type)){
+        if(FieldDef.AUTO_COUNTER.equals(f.type)){
+            LinearLayout counter=Ui.infoCard(this,Ui.PRIMARY_SOFT,Ui.BORDER);
+            TextView value=Ui.text(this,raw.isEmpty()?"Будет присвоен автоматически":raw,18,Ui.PRIMARY_DARK,true);
+            counter.addView(value);
+            counter.addView(Ui.text(this,"Автоматическое поле · вручную не редактируется",11,Ui.MUTED,false));
+            w.raw=raw;
+            w.root=counter;
+
+        } else if(FieldDef.CHECKBOX.equals(f.type)){
             CheckBox c=new CheckBox(this);
             c.setText("Да");
             c.setTextColor(Ui.TEXT);
@@ -502,6 +510,8 @@ public class RecordEditActivity extends Activity {
         FieldWidget(FieldDef f){field=f;}
 
         String getRaw(){
+            if(FieldDef.AUTO_COUNTER.equals(field.type))
+                return raw==null?"":raw;
             if(FieldDef.CHECKBOX.equals(field.type))
                 return ((CheckBox)input).isChecked()?"1":"0";
             if(FieldDef.DATE.equals(field.type)||FieldDef.PHOTO.equals(field.type))
