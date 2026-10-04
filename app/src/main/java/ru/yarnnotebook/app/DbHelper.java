@@ -61,6 +61,8 @@ public class DbHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX idx_yarns_name ON yarns(name)");
         db.execSQL("CREATE UNIQUE INDEX idx_yarns_internal_number ON yarns(internal_number) WHERE internal_number>0");
         db.execSQL("CREATE INDEX idx_yarns_archived ON yarns(archived,archived_at)");
+        db.execSQL("CREATE TABLE app_meta (meta_key TEXT PRIMARY KEY, meta_value INTEGER NOT NULL)");
+        db.execSQL("INSERT INTO app_meta(meta_key,meta_value) VALUES('next_internal_number',1)");
     }
 
     @Override
@@ -90,6 +92,11 @@ public class DbHelper extends SQLiteOpenHelper {
 
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_yarns_internal_number ON yarns(internal_number) WHERE internal_number>0");
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_yarns_archived ON yarns(archived,archived_at)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS app_meta (meta_key TEXT PRIMARY KEY, meta_value INTEGER NOT NULL)");
+            ContentValues meta = new ContentValues();
+            meta.put("meta_key", "next_internal_number");
+            meta.put("meta_value", number);
+            db.insertWithOnConflict("app_meta", null, meta, SQLiteDatabase.CONFLICT_REPLACE);
         }
     }
 
@@ -497,7 +504,11 @@ public class DbHelper extends SQLiteOpenHelper {
 
     public long saveYarn(YarnRecord r, boolean markSaved) {
         SQLiteDatabase db = getWritableDatabase();
-        if (r.id == 0 && r.internalNumber <= 0) r.internalNumber = nextInternalNumber();
+        if (r.id == 0 && r.internalNumber <= 0) {
+            r.internalNumber = nextInternalNumber();
+        } else if (r.id == 0 && r.internalNumber > 0) {
+            ensureNextInternalNumberAtLeast(r.internalNumber + 1);
+        }
         ContentValues v = valuesFor(r, markSaved);
         long now = System.currentTimeMillis();
         v.put("updated_at", now);
@@ -569,13 +580,47 @@ public class DbHelper extends SQLiteOpenHelper {
         return newLayoutId;
     }
 
-    public long nextInternalNumber() {
-        Cursor c = getReadableDatabase().rawQuery(
-                "SELECT COALESCE(MAX(internal_number),0)+1 FROM yarns", null);
-        long next = 1;
-        if (c.moveToFirst()) next = Math.max(1, c.getLong(0));
+    public synchronized long nextInternalNumber() {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            db.execSQL("CREATE TABLE IF NOT EXISTS app_meta (meta_key TEXT PRIMARY KEY, meta_value INTEGER NOT NULL)");
+            Cursor c = db.rawQuery(
+                    "SELECT meta_value FROM app_meta WHERE meta_key='next_internal_number' LIMIT 1", null);
+            long next;
+            if (c.moveToFirst()) {
+                next = Math.max(1, c.getLong(0));
+            } else {
+                Cursor max = db.rawQuery("SELECT COALESCE(MAX(internal_number),0)+1 FROM yarns", null);
+                next = max.moveToFirst() ? Math.max(1, max.getLong(0)) : 1;
+                max.close();
+            }
+            c.close();
+
+            ContentValues values = new ContentValues();
+            values.put("meta_key", "next_internal_number");
+            values.put("meta_value", next + 1);
+            db.insertWithOnConflict("app_meta", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            db.setTransactionSuccessful();
+            return next;
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    private synchronized void ensureNextInternalNumberAtLeast(long requiredNext) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.execSQL("CREATE TABLE IF NOT EXISTS app_meta (meta_key TEXT PRIMARY KEY, meta_value INTEGER NOT NULL)");
+        Cursor c = db.rawQuery(
+                "SELECT meta_value FROM app_meta WHERE meta_key='next_internal_number' LIMIT 1", null);
+        long current = c.moveToFirst() ? c.getLong(0) : 1;
         c.close();
-        return next;
+        if (current >= requiredNext) return;
+
+        ContentValues values = new ContentValues();
+        values.put("meta_key", "next_internal_number");
+        values.put("meta_value", requiredNext);
+        db.insertWithOnConflict("app_meta", null, values, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public boolean internalNumberExists(long number) {
