@@ -218,6 +218,12 @@ final class Ui {
         return v;
     }
 
+    static View hSpacer(Context c, int w) {
+        View v = new View(c);
+        v.setLayoutParams(new LinearLayout.LayoutParams(dp(c, w), 1));
+        return v;
+    }
+
     static ScrollView scroll(Context c, View child) {
         ScrollView s = new ScrollView(c);
         s.setFillViewport(true);
