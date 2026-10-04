@@ -37,7 +37,7 @@ public class CatalogActivity extends Activity {
 
     private void refresh(){
         catalog=db.getCatalog(catalogId);list.removeAllViews();List<CardTemplate> ts=db.getTemplates(catalogId);
-        if(ts.isEmpty()){LinearLayout c=Ui.card(this);c.addView(Ui.text(this,"Нет типов карточек",18,Ui.TEXT,true));c.addView(Ui.text(this,"Например: «Пряжа», «Двигатель», «Автозапчасть», «Одежда». Для каждого типа задаётся независимый набор полей, формул и шаблон вывода.",14,Ui.MUTED,false));list.addView(c);return;}
+        if(ts.isEmpty()){LinearLayout c=Ui.card(this);c.addView(Ui.text(this,"Нет типов товаров",18,Ui.TEXT,true));c.addView(Ui.text(this,"Например: «Пряжа», «Двигатель», «Автозапчасть», «Одежда». Для каждого типа задаётся независимый набор полей, формул и шаблон вывода.",14,Ui.MUTED,false));list.addView(c);return;}
         for(CardTemplate t:ts){
             LinearLayout c=Ui.card(this);c.addView(Ui.text(this,t.name,19,Ui.TEXT,true));c.addView(Ui.text(this,"Полей: "+db.getFields(t.id,false).size()+" · товаров: "+db.countRecords(t.id),13,Ui.MUTED,false));
             LinearLayout r=Ui.row(this);android.widget.Button open=Ui.primaryButton(this,"Товары");android.widget.Button fields=Ui.button(this,"Поля");android.widget.Button rename=Ui.button(this,"Название");android.widget.Button del=Ui.button(this,"Удалить");
