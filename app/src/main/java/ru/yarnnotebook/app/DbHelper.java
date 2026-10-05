@@ -670,6 +670,22 @@ public class DbHelper extends SQLiteOpenHelper {
         return true;
     }
 
+    public int clearArchivedPhotoReferences() {
+        ContentValues values = new ContentValues();
+        values.put("photo_file", "");
+        values.put("updated_at", System.currentTimeMillis());
+        return getWritableDatabase().update(
+                "yarns", values, "archived=1 AND TRIM(photo_file)<>''", null);
+    }
+
+    public int clearAllPhotoReferences() {
+        ContentValues values = new ContentValues();
+        values.put("photo_file", "");
+        values.put("updated_at", System.currentTimeMillis());
+        return getWritableDatabase().update(
+                "yarns", values, "TRIM(photo_file)<>''", null);
+    }
+
     public int getArchivedCount() {
         Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM yarns WHERE archived=1", null);
         int count = 0;
