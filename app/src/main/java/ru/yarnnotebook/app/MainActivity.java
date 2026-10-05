@@ -39,10 +39,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
-import androidx.core.content.FileProvider;
-
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -50,6 +47,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -81,10 +79,9 @@ public class MainActivity extends Activity {
     private static final int REQ_EXPORT_JSON = 7001;
     private static final int REQ_IMPORT_DATABASE = 7002;
     private static final int REQ_IMPORT_LAYOUT = 7003;
-    private static final int REQ_CAMERA = 7004;
+    private static final int REQ_PICK_PHOTO = 7004;
     private String pendingExportJson = "";
-    private File pendingCameraFile;
-    private long pendingCameraYarnId = 0;
+    private long pendingPhotoYarnId = 0;
 
     private ImageView editorPhotoPreview;
     private Button editorPhotoButton;
@@ -931,7 +928,7 @@ public class MainActivity extends Activity {
         form.addView(editorPhotoPreview, previewParams);
 
         LinearLayout photoActions = horizontal();
-        editorPhotoButton = button("Снять фото");
+        editorPhotoButton = button("Выбрать фото");
         editorDeletePhotoButton = button("Удалить фото");
         LinearLayout.LayoutParams photoButtonParams = new LinearLayout.LayoutParams(0, dp(50), 1);
         LinearLayout.LayoutParams photoDeleteParams = new LinearLayout.LayoutParams(0, dp(50), 1);
@@ -944,7 +941,7 @@ public class MainActivity extends Activity {
         editorInternalArticle.setPadding(dp(2), dp(12), 0, dp(8));
         form.addView(editorInternalArticle);
 
-        editorPhotoButton.setOnClickListener(v -> startCameraForEditor(existing));
+        editorPhotoButton.setOnClickListener(v -> startPhotoPickerForEditor(existing));
         editorDeletePhotoButton.setOnClickListener(v -> removeCurrentPhoto(existing));
         updateEditorPhotoViews(existing);
 
@@ -982,6 +979,7 @@ public class MainActivity extends Activity {
         sp.setMargins(0, dp(12), 0, dp(8));
         form.addView(save, sp);
         save.setOnClickListener(v -> {
+            if (!validateComposition()) return;
             YarnRecord r = collect(existing);
             long id = db.saveYarn(r, true);
             currentYarnId = id;
@@ -995,6 +993,7 @@ public class MainActivity extends Activity {
         cp.setMargins(0, 0, 0, dp(8));
         form.addView(copy, cp);
         copy.setOnClickListener(v -> {
+            if (!validateComposition()) return;
             YarnRecord current = collect(existing);
             if (current.id == 0 || current.internalNumber <= 0) {
                 db.saveYarn(current, false);
@@ -1010,6 +1009,7 @@ public class MainActivity extends Activity {
             dpv.setMargins(0, 0, 0, dp(8));
             form.addView(duplicate, dpv);
             duplicate.setOnClickListener(v -> {
+                if (!validateComposition()) return;
                 YarnRecord current = collect(existing);
                 db.saveYarn(current, existing.saved);
                 long copyId = db.duplicateYarn(existing.id);
@@ -1039,7 +1039,7 @@ public class MainActivity extends Activity {
         setContentView(page);
     }
 
-    private void startCameraForEditor(YarnRecord existing) {
+    private void startPhotoPickerForEditor(YarnRecord existing) {
         YarnRecord current = collect(existing);
         if (current.id == 0 || current.internalNumber <= 0) {
             db.saveYarn(current, false);
@@ -1049,31 +1049,21 @@ public class MainActivity extends Activity {
             currentYarnId = current.id;
         }
 
+        pendingPhotoYarnId = currentYarnId;
         try {
-            pendingCameraFile = PhotoStore.newCameraTempFile(this);
-            pendingCameraYarnId = currentYarnId;
-            Uri uri = FileProvider.getUriForFile(
-                    this,
-                    getPackageName() + ".fileprovider",
-                    pendingCameraFile);
-
-            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            intent.putExtra(MediaStore.EXTRA_OUTPUT, uri);
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            intent.setClipData(ClipData.newRawUri("Фото товара", uri));
-
-            if (intent.resolveActivity(getPackageManager()) == null) {
-                pendingCameraFile.delete();
-                pendingCameraFile = null;
-                pendingCameraYarnId = 0;
-                Toast.makeText(this, "Приложение камеры не найдено", Toast.LENGTH_LONG).show();
-                return;
+            Intent intent;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent = new Intent(MediaStore.ACTION_PICK_IMAGES);
+                intent.setType("image/*");
+            } else {
+                intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("image/*");
             }
-            startActivityForResult(intent, REQ_CAMERA);
+            startActivityForResult(intent, REQ_PICK_PHOTO);
         } catch (Exception e) {
-            pendingCameraFile = null;
-            pendingCameraYarnId = 0;
-            Toast.makeText(this, "Не удалось открыть камеру: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            pendingPhotoYarnId = 0;
+            Toast.makeText(this, "Не удалось открыть выбор фотографий: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -1117,7 +1107,7 @@ public class MainActivity extends Activity {
                 editorPhotoPreview.setVisibility(View.GONE);
             }
         }
-        if (editorPhotoButton != null) editorPhotoButton.setText(hasPhoto ? "Заменить фото" : "Снять фото");
+        if (editorPhotoButton != null) editorPhotoButton.setText(hasPhoto ? "Заменить фото" : "Выбрать фото");
         if (editorDeletePhotoButton != null) {
             editorDeletePhotoButton.setVisibility(hasPhoto ? View.VISIBLE : View.GONE);
         }
@@ -1226,6 +1216,51 @@ public class MainActivity extends Activity {
             b.append(percent).append("% ").append(material);
         }
         return b.toString();
+    }
+
+    private boolean validateComposition() {
+        BigDecimal total = BigDecimal.ZERO;
+        boolean hasComposition = false;
+
+        for (CompositionRow row : compositionRows) {
+            String percentText = s(row.percent).replace(',', '.');
+            String material = s(row.material);
+
+            if (blank(percentText) && blank(material)) continue;
+            hasComposition = true;
+
+            if (blank(percentText)) {
+                Toast.makeText(this, "Укажите процент для каждого компонента состава", Toast.LENGTH_LONG).show();
+                row.percent.requestFocus();
+                return false;
+            }
+            if (blank(material)) {
+                Toast.makeText(this, "Укажите сырьё для каждого процента состава", Toast.LENGTH_LONG).show();
+                row.material.requestFocus();
+                return false;
+            }
+
+            try {
+                BigDecimal value = new BigDecimal(percentText);
+                if (value.compareTo(BigDecimal.ZERO) <= 0 || value.compareTo(new BigDecimal("100")) > 0) {
+                    Toast.makeText(this, "Процент каждого компонента должен быть больше 0 и не больше 100", Toast.LENGTH_LONG).show();
+                    row.percent.requestFocus();
+                    return false;
+                }
+                total = total.add(value);
+            } catch (NumberFormatException e) {
+                Toast.makeText(this, "Проверьте процент в составе", Toast.LENGTH_LONG).show();
+                row.percent.requestFocus();
+                return false;
+            }
+        }
+
+        if (hasComposition && total.compareTo(new BigDecimal("100")) != 0) {
+            String value = total.stripTrailingZeros().toPlainString().replace('.', ',');
+            Toast.makeText(this, "Сумма состава сейчас " + value + "%. Должно быть 100%", Toast.LENGTH_LONG).show();
+            return false;
+        }
+        return true;
     }
 
     private EditText[] addInlineFields(
@@ -1799,17 +1834,13 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == REQ_CAMERA) {
+        if (requestCode == REQ_PICK_PHOTO) {
             try {
-                if (resultCode == RESULT_OK && pendingCameraFile != null && pendingCameraYarnId > 0) {
-                    YarnRecord record = db.getYarn(pendingCameraYarnId);
+                if (resultCode == RESULT_OK && data != null && data.getData() != null && pendingPhotoYarnId > 0) {
+                    YarnRecord record = db.getYarn(pendingPhotoYarnId);
                     if (record == null) throw new IOException("Карточка товара не найдена");
 
-                    String fileName = PhotoStore.saveCompressed(
-                            this,
-                            pendingCameraFile,
-                            record.internalNumber,
-                            record.archived);
+                    String fileName = PhotoStore.saveCompressed(this, data.getData(), record);
                     db.setPhotoFile(record.id, fileName);
                     record.photoFile = fileName;
                     updateEditorPhotoViews(record);
@@ -1818,9 +1849,7 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 Toast.makeText(this, "Ошибка фотографии: " + e.getMessage(), Toast.LENGTH_LONG).show();
             } finally {
-                if (pendingCameraFile != null && pendingCameraFile.exists()) pendingCameraFile.delete();
-                pendingCameraFile = null;
-                pendingCameraYarnId = 0;
+                pendingPhotoYarnId = 0;
             }
             return;
         }
