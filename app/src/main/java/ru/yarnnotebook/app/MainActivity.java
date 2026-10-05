@@ -1703,6 +1703,7 @@ public class MainActivity extends Activity {
                         "Добавить базу",
                         "Добавить выкладку",
                         "Сортировка по номеру",
+                        "Хранилище фотографий",
                         overlayItem
                 }, (dialog, which) -> {
                     if (which == 0) exportWholeDatabase();
@@ -1710,9 +1711,75 @@ public class MainActivity extends Activity {
                     else if (which == 2) requestImport(true);
                     else if (which == 3) requestImport(false);
                     else if (which == 4) showNumberSortDialog();
+                    else if (which == 5) showPhotoStorageDialog();
                     else toggleFloatingButton();
                 })
                 .show();
+    }
+
+    private void showPhotoStorageDialog() {
+        PhotoStore.StorageStats stats = PhotoStore.getStorageStats(this);
+        String message =
+                "Всего: " + stats.totalFiles() + " фото · " + formatBytes(stats.totalBytes()) +
+                "\n\nАктивные товары: " + stats.activeFiles + " фото · " + formatBytes(stats.activeBytes) +
+                "\nАрхив: " + stats.archiveFiles + " фото · " + formatBytes(stats.archiveBytes) +
+                "\n\nУдаление фотографий не удаляет карточки товаров. В карточках просто исчезнет фото.";
+
+        new AlertDialog.Builder(this)
+                .setTitle("Хранилище фотографий")
+                .setMessage(message)
+                .setItems(new String[]{
+                        "Очистить фотографии архива",
+                        "Удалить все фотографии"
+                }, (dialog, which) -> {
+                    if (which == 0) confirmClearArchivePhotos();
+                    else confirmClearAllPhotos();
+                })
+                .setNegativeButton("Закрыть", null)
+                .show();
+    }
+
+    private void confirmClearArchivePhotos() {
+        PhotoStore.StorageStats stats = PhotoStore.getStorageStats(this);
+        new AlertDialog.Builder(this)
+                .setTitle("Очистить фото архива?")
+                .setMessage("Будет удалено " + stats.archiveFiles + " фото · " +
+                        formatBytes(stats.archiveBytes) +
+                        ". Карточки товаров в архиве сохранятся.")
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Удалить", (d, w) -> {
+                    PhotoStore.clearArchiveStorage(this);
+                    db.clearArchivedPhotoReferences();
+                    Toast.makeText(this, "Фотографии архива удалены", Toast.LENGTH_SHORT).show();
+                    showPhotoStorageDialog();
+                })
+                .show();
+    }
+
+    private void confirmClearAllPhotos() {
+        PhotoStore.StorageStats stats = PhotoStore.getStorageStats(this);
+        new AlertDialog.Builder(this)
+                .setTitle("Удалить все фотографии?")
+                .setMessage("Будет удалено " + stats.totalFiles() + " фото · " +
+                        formatBytes(stats.totalBytes()) +
+                        ". Все карточки товаров и их данные сохранятся.")
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Удалить все", (d, w) -> {
+                    PhotoStore.clearAllStorage(this);
+                    db.clearAllPhotoReferences();
+                    Toast.makeText(this, "Все фотографии удалены", Toast.LENGTH_SHORT).show();
+                    showPhotoStorageDialog();
+                })
+                .show();
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 1024L) return bytes + " Б";
+        double kb = bytes / 1024.0;
+        if (kb < 1024.0) return String.format(new Locale("ru", "RU"), "%.1f КБ", kb);
+        double mb = kb / 1024.0;
+        if (mb < 1024.0) return String.format(new Locale("ru", "RU"), "%.1f МБ", mb);
+        return String.format(new Locale("ru", "RU"), "%.2f ГБ", mb / 1024.0);
     }
 
     private void showNumberSortDialog() {
