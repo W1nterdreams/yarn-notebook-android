@@ -66,6 +66,8 @@ public class MainActivity extends Activity {
     private final int MUTED = Color.rgb(116, 106, 100);
     private final int DRAFT = Color.rgb(161, 67, 46);
     private final int BORDER = Color.rgb(222, 214, 209);
+    private final int COMPOSITION_OK = Color.rgb(46, 125, 50);
+    private final int COMPOSITION_BAD = Color.rgb(198, 40, 40);
 
     private DbHelper db;
     private long currentLayoutId = 0;
@@ -91,6 +93,7 @@ public class MainActivity extends Activity {
     private EditText fCountry, fManufacturer, fName, fColor, fShade, fLength,
             fThread, fAvailability, fPrice, fStorage, fDescription;
     private LinearLayout compositionContainer;
+    private TextView compositionTotalLabel;
     private final List<CompositionRow> compositionRows = new ArrayList<>();
     private LinearLayout bobbinWeightContainer;
     private final List<EditText> bobbinWeightFields = new ArrayList<>();
@@ -1116,9 +1119,19 @@ public class MainActivity extends Activity {
     private void addCompositionEditor(LinearLayout parent, String composition) {
         compositionRows.clear();
 
+        LinearLayout compositionHeader = horizontal();
+        compositionHeader.setGravity(Gravity.CENTER_VERTICAL);
+        compositionHeader.setPadding(dp(2), dp(8), 0, dp(5));
+
         TextView label = text("Состав", 14, TEXT, true);
-        label.setPadding(dp(2), dp(8), 0, dp(5));
-        parent.addView(label);
+        compositionHeader.addView(label);
+
+        compositionTotalLabel = text("· 0%", 14, COMPOSITION_BAD, true);
+        LinearLayout.LayoutParams totalParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        totalParams.setMargins(dp(6), 0, 0, 0);
+        compositionHeader.addView(compositionTotalLabel, totalParams);
+        parent.addView(compositionHeader);
 
         compositionContainer = vertical();
         parent.addView(compositionContainer);
@@ -1190,13 +1203,20 @@ public class MainActivity extends Activity {
             compositionContainer.removeView(row.root);
             compositionRows.remove(row);
             refreshCompositionRemoveButtons();
+            updateCompositionTotal();
         });
 
         LinearLayout.LayoutParams rootParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
         rootParams.setMargins(0, 0, 0, dp(6));
         compositionContainer.addView(row.root, rootParams);
         compositionRows.add(row);
+        row.percent.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+            @Override public void afterTextChanged(Editable s) { updateCompositionTotal(); }
+        });
         refreshCompositionRemoveButtons();
+        updateCompositionTotal();
     }
 
     private void refreshCompositionRemoveButtons() {
@@ -1204,6 +1224,24 @@ public class MainActivity extends Activity {
         for (CompositionRow row : compositionRows) {
             row.remove.setVisibility(many ? View.VISIBLE : View.GONE);
         }
+    }
+
+    private void updateCompositionTotal() {
+        if (compositionTotalLabel == null) return;
+
+        BigDecimal total = BigDecimal.ZERO;
+        for (CompositionRow row : compositionRows) {
+            String percentText = s(row.percent).replace(',', '.');
+            if (blank(percentText)) continue;
+            try {
+                total = total.add(new BigDecimal(percentText));
+            } catch (NumberFormatException ignored) { }
+        }
+
+        String value = total.stripTrailingZeros().toPlainString().replace('.', ',');
+        compositionTotalLabel.setText("· " + value + "%");
+        compositionTotalLabel.setTextColor(
+                total.compareTo(new BigDecimal("100")) == 0 ? COMPOSITION_OK : COMPOSITION_BAD);
     }
 
     private String collectComposition() {
