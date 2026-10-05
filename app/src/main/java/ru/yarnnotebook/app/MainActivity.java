@@ -1,5 +1,6 @@
 package ru.yarnnotebook.app;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
@@ -7,6 +8,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Insets;
@@ -82,6 +84,7 @@ public class MainActivity extends Activity {
     private static final int REQ_IMPORT_DATABASE = 7002;
     private static final int REQ_IMPORT_LAYOUT = 7003;
     private static final int REQ_PICK_PHOTO = 7004;
+    private static final int REQ_WRITE_STORAGE = 7005;
     private String pendingExportJson = "";
     private long pendingPhotoYarnId = 0;
 
@@ -117,6 +120,7 @@ public class MainActivity extends Activity {
         registerSystemBackGesture();
         showHome();
         ensureOverlayServiceIfEnabled();
+        startPhotoMigrationIfPossible();
     }
 
     @Override
@@ -1053,6 +1057,15 @@ public class MainActivity extends Activity {
         }
 
         pendingPhotoYarnId = currentYarnId;
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_WRITE_STORAGE);
+            return;
+        }
+        openPhotoPicker();
+    }
+
+    private void openPhotoPicker() {
         try {
             Intent intent;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -1067,6 +1080,34 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             pendingPhotoYarnId = 0;
             Toast.makeText(this, "Не удалось открыть выбор фотографий: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void startPhotoMigrationIfPossible() {
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        new Thread(() -> {
+            try {
+                PhotoStore.migrateExistingPhotos(this, db.getAllYarnsForPhotoMigration());
+            } catch (Exception ignored) { }
+        }, "photo-storage-migration").start();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != REQ_WRITE_STORAGE) return;
+
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            startPhotoMigrationIfPossible();
+            if (pendingPhotoYarnId > 0) openPhotoPicker();
+        } else {
+            pendingPhotoYarnId = 0;
+            Toast.makeText(this,
+                    "Без разрешения Android не может сохранить фото в видимую папку Pictures/Моя пряжа",
+                    Toast.LENGTH_LONG).show();
         }
     }
 
@@ -1720,9 +1761,11 @@ public class MainActivity extends Activity {
     private void showPhotoStorageDialog() {
         PhotoStore.StorageStats stats = PhotoStore.getStorageStats(this);
         String message =
-                "Всего: " + stats.totalFiles() + " фото · " + formatBytes(stats.totalBytes()) +
+                "Папка: " + PhotoStore.publicFolderLabel() +
+                "\n\nВсего: " + stats.totalFiles() + " фото · " + formatBytes(stats.totalBytes()) +
                 "\n\nАктивные товары: " + stats.activeFiles + " фото · " + formatBytes(stats.activeBytes) +
                 "\nАрхив: " + stats.archiveFiles + " фото · " + formatBytes(stats.archiveBytes) +
+                "\n\nВнутри Pictures/Моя пряжа активные фото разложены по папкам выкладок, а проданные — в папке Архив." +
                 "\n\nУдаление фотографий не удаляет карточки товаров. В карточках просто исчезнет фото.";
 
         new AlertDialog.Builder(this)
