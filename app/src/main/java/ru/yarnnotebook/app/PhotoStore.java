@@ -181,7 +181,10 @@ public final class PhotoStore {
     private static boolean move(Context context, YarnRecord record, boolean toArchive) {
         if (record == null || record.photoFile == null || record.photoFile.trim().isEmpty()) return true;
 
-        Uri from = ensureVisibleUri(context, record);
+        // Сначала ищем фото строго в текущем месте. Широкий поиск оставляем только
+        // как запасной вариант для карточек, переживших старые версии/миграцию.
+        Uri from = findVisibleUriInLocation(context, record, record.archived);
+        if (from == null) from = ensureVisibleUri(context, record);
         if (from == null) return true;
 
         String sourcePath = relativePath(record, record.archived);
@@ -190,7 +193,9 @@ public final class PhotoStore {
 
         Uri to = null;
         try {
-            deleteVisiblePhoto(context, record, toArchive);
+            // ВАЖНО: очищаем только целевую папку. Нельзя использовать широкий
+            // findVisibleUri(), иначе можно удалить исходное фото до копирования.
+            deleteVisiblePhotoInLocation(context, record, toArchive);
             to = createVisibleUri(context, record, toArchive, record.photoFile.trim());
             try (InputStream in = openInput(context, from);
                  OutputStream out = openOutput(context, to)) {
@@ -230,6 +235,48 @@ public final class PhotoStore {
             if (target != null) deleteUri(context, target);
             return null;
         }
+    }
+
+    private static Uri findVisibleUriInLocation(Context context, YarnRecord record, boolean archived) {
+        String name = record == null || record.photoFile == null ? "" : record.photoFile.trim();
+        if (name.isEmpty()) return null;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            Uri collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+            String[] projection = {
+                    MediaStore.Images.Media._ID,
+                    MediaStore.Images.Media.RELATIVE_PATH
+            };
+            String selection = MediaStore.Images.Media.DISPLAY_NAME + "=?";
+            String[] args = {name};
+            String expected = normalizeRelativePath(relativePath(record, archived));
+
+            try (Cursor c = context.getContentResolver().query(
+                    collection, projection, selection, args,
+                    MediaStore.Images.Media.DATE_ADDED + " DESC")) {
+                if (c != null) {
+                    int idCol = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
+                    int pathCol = c.getColumnIndex(MediaStore.Images.Media.RELATIVE_PATH);
+                    while (c.moveToNext()) {
+                        String rel = pathCol >= 0 && !c.isNull(pathCol) ? c.getString(pathCol) : "";
+                        if (!expected.equals(normalizeRelativePath(rel))) continue;
+                        return ContentUris.withAppendedId(collection, c.getLong(idCol));
+                    }
+                }
+            } catch (Exception ignored) { }
+            return null;
+        }
+
+        File file = publicFile(record, archived, name);
+        return file.isFile() ? Uri.fromFile(file) : null;
+    }
+
+    private static String normalizeRelativePath(String relativePath) {
+        if (relativePath == null) return "";
+        String path = relativePath.replace('\\', '/').trim();
+        while (path.startsWith("/")) path = path.substring(1);
+        while (path.endsWith("/")) path = path.substring(0, path.length() - 1);
+        return path;
     }
 
     private static Uri findVisibleUri(Context context, YarnRecord record, boolean archived) {
@@ -349,6 +396,11 @@ public final class PhotoStore {
 
     private static void deleteVisiblePhoto(Context context, YarnRecord record, boolean archived) {
         Uri uri = findVisibleUri(context, record, archived);
+        if (uri != null) deleteUri(context, uri);
+    }
+
+    private static void deleteVisiblePhotoInLocation(Context context, YarnRecord record, boolean archived) {
+        Uri uri = findVisibleUriInLocation(context, record, archived);
         if (uri != null) deleteUri(context, uri);
     }
 
