@@ -282,6 +282,121 @@ public final class PhotoStore {
         }
     }
 
+    public static final class StorageStats {
+        public int activeFiles;
+        public long activeBytes;
+        public int archiveFiles;
+        public long archiveBytes;
+
+        public int totalFiles() { return activeFiles + archiveFiles; }
+        public long totalBytes() { return activeBytes + archiveBytes; }
+    }
+
+    public static StorageStats getStorageStats(Context context) {
+        StorageStats stats = new StorageStats();
+
+        File layoutsRoot = new File(context.getFilesDir(), LAYOUTS_ROOT);
+        File[] layouts = layoutsRoot.listFiles();
+        if (layouts != null) {
+            for (File layout : layouts) {
+                if (layout == null || !layout.isDirectory()) continue;
+                File photos = new File(layout, PHOTOS);
+                addStats(new File(photos, ACTIVE), stats, false);
+                addStats(new File(photos, ARCHIVE), stats, true);
+            }
+        }
+
+        File legacyRoot = new File(context.getFilesDir(), LEGACY_ROOT);
+        addStats(new File(legacyRoot, ACTIVE), stats, false);
+        addStats(new File(legacyRoot, ARCHIVE), stats, true);
+        return stats;
+    }
+
+    public static void clearArchiveStorage(Context context) {
+        File layoutsRoot = new File(context.getFilesDir(), LAYOUTS_ROOT);
+        File[] layouts = layoutsRoot.listFiles();
+        if (layouts != null) {
+            for (File layout : layouts) {
+                if (layout == null || !layout.isDirectory()) continue;
+                File photos = new File(layout, PHOTOS);
+                File archive = new File(photos, ARCHIVE);
+                deleteContents(archive);
+                deleteIfEmpty(archive);
+                deleteIfEmpty(photos);
+                deleteIfEmpty(layout);
+            }
+        }
+
+        File legacyRoot = new File(context.getFilesDir(), LEGACY_ROOT);
+        File legacyArchive = new File(legacyRoot, ARCHIVE);
+        deleteContents(legacyArchive);
+        deleteIfEmpty(legacyArchive);
+        deleteIfEmpty(legacyRoot);
+    }
+
+    public static void clearAllStorage(Context context) {
+        File layoutsRoot = new File(context.getFilesDir(), LAYOUTS_ROOT);
+        File[] layouts = layoutsRoot.listFiles();
+        if (layouts != null) {
+            for (File layout : layouts) {
+                if (layout == null || !layout.isDirectory()) continue;
+                File photos = new File(layout, PHOTOS);
+                File active = new File(photos, ACTIVE);
+                File archive = new File(photos, ARCHIVE);
+                deleteContents(active);
+                deleteContents(archive);
+                deleteIfEmpty(active);
+                deleteIfEmpty(archive);
+                deleteIfEmpty(photos);
+                deleteIfEmpty(layout);
+            }
+        }
+
+        File legacyRoot = new File(context.getFilesDir(), LEGACY_ROOT);
+        File legacyActive = new File(legacyRoot, ACTIVE);
+        File legacyArchive = new File(legacyRoot, ARCHIVE);
+        deleteContents(legacyActive);
+        deleteContents(legacyArchive);
+        deleteIfEmpty(legacyActive);
+        deleteIfEmpty(legacyArchive);
+        deleteIfEmpty(legacyRoot);
+    }
+
+    private static void addStats(File dir, StorageStats stats, boolean archive) {
+        if (dir == null || !dir.isDirectory()) return;
+        File[] children = dir.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child == null) continue;
+            if (child.isDirectory()) {
+                addStats(child, stats, archive);
+            } else if (child.isFile()) {
+                if (archive) {
+                    stats.archiveFiles++;
+                    stats.archiveBytes += child.length();
+                } else {
+                    stats.activeFiles++;
+                    stats.activeBytes += child.length();
+                }
+            }
+        }
+    }
+
+    private static void deleteContents(File dir) {
+        if (dir == null || !dir.isDirectory()) return;
+        File[] children = dir.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child == null) continue;
+            if (child.isDirectory()) {
+                deleteContents(child);
+                deleteIfEmpty(child);
+            } else {
+                child.delete();
+            }
+        }
+    }
+
     private static void cleanupEmptyLayoutFolders(Context context, long layoutId) {
         File layout = new File(new File(context.getFilesDir(), LAYOUTS_ROOT), "layout_" + layoutId);
         File photos = new File(layout, PHOTOS);
