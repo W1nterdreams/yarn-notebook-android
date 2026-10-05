@@ -1539,8 +1539,13 @@ public class MainActivity extends Activity {
 
     private YarnRecord collect(YarnRecord existing) {
         YarnRecord r = new YarnRecord();
-        YarnRecord base = existing;
-        if (base == null && currentYarnId > 0) base = db.getYarn(currentYarnId);
+
+        // Для уже существующей карточки всегда берём актуальное состояние из БД.
+        // Иначе после выбора/удаления фото первоначальный объект existing остаётся
+        // устаревшим и при нажатии "Сохранить" может затереть новое photo_file.
+        YarnRecord base = currentYarnId > 0 ? db.getYarn(currentYarnId) : existing;
+        if (base == null) base = existing;
+
         if (base != null) {
             r.id = base.id;
             r.saved = base.saved;
