@@ -28,13 +28,16 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.AbsListView;
 import android.widget.ArrayAdapter;
+import android.widget.BaseAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.ScrollView;
 import android.widget.SearchView;
 import android.widget.TextView;
@@ -78,7 +81,8 @@ public class MainActivity extends Activity {
     private long lastHomeBackAt = 0L;
     private Runnable descriptionScrollRunnable;
     private int homeScrollY = 0;
-    private final Map<Long, Integer> layoutScrollY = new HashMap<>();
+    private final Map<Long, Integer> layoutScrollPosition = new HashMap<>();
+    private final Map<Long, Integer> layoutScrollOffset = new HashMap<>();
 
     private static final int REQ_EXPORT_JSON = 7001;
     private static final int REQ_IMPORT_DATABASE = 7002;
@@ -411,18 +415,40 @@ public class MainActivity extends Activity {
         search.setQuery(initialQuery, false);
         page.addView(search, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(62)));
 
-        ScrollView scroll = new ScrollView(this);
-        final int restoreLayoutScrollY = layoutScrollY.containsKey(layoutId)
-                ? layoutScrollY.get(layoutId)
-                : 0;
-        scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) ->
-                layoutScrollY.put(layoutId, scrollY));
-        LinearLayout list = vertical();
+        ListView list = new ListView(this);
+        list.setDivider(null);
+        list.setDividerHeight(0);
+        list.setBackgroundColor(BG);
         list.setPadding(dp(12), dp(4), dp(12), dp(90));
-        scroll.addView(list);
-        page.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        list.setClipToPadding(false);
+        list.setVerticalScrollBarEnabled(true);
 
-        Runnable render = () -> renderYarns(list, layoutId, search.getQuery().toString());
+        final int restorePosition = layoutScrollPosition.containsKey(layoutId)
+                ? layoutScrollPosition.get(layoutId)
+                : 0;
+        final int restoreOffset = layoutScrollOffset.containsKey(layoutId)
+                ? layoutScrollOffset.get(layoutId)
+                : 0;
+
+        list.setOnScrollListener(new AbsListView.OnScrollListener() {
+            @Override public void onScrollStateChanged(AbsListView view, int scrollState) { }
+
+            @Override
+            public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+                if (totalItemCount <= 0) return;
+                layoutScrollPosition.put(layoutId, firstVisibleItem);
+                View first = view.getChildAt(0);
+                layoutScrollOffset.put(layoutId, first == null ? 0 : first.getTop());
+            }
+        });
+
+        page.addView(list, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+
+        Runnable render = () -> {
+            String query = search.getQuery().toString();
+            renderYarns(list, layoutId, query);
+            if (!blank(query)) list.setSelection(0);
+        };
         search.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override public boolean onQueryTextSubmit(String query) { render.run(); return true; }
             @Override public boolean onQueryTextChange(String newText) { render.run(); return true; }
@@ -435,38 +461,72 @@ public class MainActivity extends Activity {
         page.addView(plus, pp);
         plus.setOnClickListener(v -> showEditor(layoutId, 0));
         setContentView(page);
-        scroll.post(() -> scroll.scrollTo(0, restoreLayoutScrollY));
+
+        if (blank(initialQuery)) {
+            list.post(() -> list.setSelectionFromTop(restorePosition, restoreOffset));
+        }
     }
 
-    private void renderYarns(LinearLayout list, long layoutId, String query) {
-        list.removeAllViews();
+    private void renderYarns(ListView list, long layoutId, String query) {
         List<YarnRecord> yarns = db.getYarnsForLayout(layoutId, query);
         if (yarns.isEmpty()) {
-            TextView empty = text(query == null || query.trim().isEmpty() ?
-                    "В выкладке пока нет пряжи." : "Ничего не найдено.", 17, MUTED, false);
-            empty.setGravity(Gravity.CENTER);
-            empty.setPadding(dp(20), dp(70), dp(20), dp(20));
-            list.addView(empty);
+            final String emptyText = query == null || query.trim().isEmpty()
+                    ? "В выкладке пока нет пряжи."
+                    : "Ничего не найдено.";
+            list.setAdapter(new BaseAdapter() {
+                @Override public int getCount() { return 1; }
+                @Override public Object getItem(int position) { return null; }
+                @Override public long getItemId(int position) { return 0; }
+
+                @Override
+                public View getView(int position, View convertView, ViewGroup parent) {
+                    TextView empty = convertView instanceof TextView
+                            ? (TextView) convertView
+                            : text("", 17, MUTED, false);
+                    empty.setText(emptyText);
+                    empty.setTextColor(MUTED);
+                    empty.setGravity(Gravity.CENTER);
+                    empty.setPadding(dp(20), dp(70), dp(20), dp(70));
+                    return empty;
+                }
+            });
             return;
         }
 
         List<YarnRecord> allYarns = db.getYarnsForLayout(layoutId, "");
         allYarns.sort((a, b) -> Long.compare(a.id, b.id));
+        Map<Long, Integer> numberById = new HashMap<>();
+        for (int i = 0; i < allYarns.size(); i++) {
+            numberById.put(allYarns.get(i).id, i + 1);
+        }
 
         boolean asc = getSharedPreferences(OverlayService.PREFS, MODE_PRIVATE)
                 .getBoolean("yarn_number_sort_asc", true);
         yarns.sort((a, b) -> asc ? Long.compare(a.id, b.id) : Long.compare(b.id, a.id));
 
-        for (YarnRecord y : yarns) {
-            int number = 0;
-            for (int i = 0; i < allYarns.size(); i++) {
-                if (allYarns.get(i).id == y.id) {
-                    number = i + 1;
-                    break;
+        list.setAdapter(new BaseAdapter() {
+            @Override public int getCount() { return yarns.size(); }
+            @Override public YarnRecord getItem(int position) { return yarns.get(position); }
+            @Override public long getItemId(int position) { return yarns.get(position).id; }
+            @Override public boolean hasStableIds() { return true; }
+
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                LinearLayout host;
+                if (convertView instanceof LinearLayout) {
+                    host = (LinearLayout) convertView;
+                    host.removeAllViews();
+                } else {
+                    host = vertical();
+                    host.setPadding(0, 0, 0, 0);
                 }
+
+                YarnRecord y = getItem(position);
+                Integer number = numberById.get(y.id);
+                host.addView(yarnCard(y, false, number == null ? 0 : number));
+                return host;
             }
-            list.addView(yarnCard(y, false, number));
-        }
+        });
     }
 
     private View yarnCard(YarnRecord y, boolean showDate, int number) {
@@ -476,11 +536,11 @@ public class MainActivity extends Activity {
         LinearLayout top = horizontal();
         top.setGravity(Gravity.TOP);
 
-        if (PhotoStore.exists(this, y)) {
+        Bitmap bitmap = PhotoStore.loadThumbnail(this, y, dp(180));
+        if (bitmap != null) {
             ImageView thumb = new ImageView(this);
             thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            Bitmap bitmap = PhotoStore.loadThumbnail(this, y, dp(180));
-            if (bitmap != null) thumb.setImageBitmap(bitmap);
+            thumb.setImageBitmap(bitmap);
             LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(dp(82), dp(82));
             tp.setMargins(0, 0, dp(12), 0);
             top.addView(thumb, tp);
