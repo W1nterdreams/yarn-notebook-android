@@ -33,6 +33,7 @@ import android.widget.ArrayAdapter;
 import android.widget.BaseAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -319,12 +320,39 @@ public class MainActivity extends Activity {
     }
 
     private void confirmDeleteLayout(LayoutRecord r) {
+        int archivedCount = db.getArchivedCountForLayout(r.id);
+
+        LinearLayout wrap = vertical();
+        wrap.setPadding(dp(22), dp(4), dp(22), 0);
+
+        TextView warning = text(
+                "Обычные товары этой выкладки будут удалены. Архивные товары можно сохранить.",
+                15, TEXT, false);
+        warning.setPadding(0, 0, 0, dp(10));
+        wrap.addView(warning);
+
+        CheckBox deleteArchived = new CheckBox(this);
+        deleteArchived.setText(archivedCount > 0
+                ? "Удалить товары этой выкладки из архива (" + archivedCount + ")"
+                : "Удалить товары этой выкладки из архива");
+        deleteArchived.setTextSize(15);
+        deleteArchived.setTextColor(TEXT);
+        deleteArchived.setChecked(false);
+        deleteArchived.setEnabled(archivedCount > 0);
+        wrap.addView(deleteArchived);
+
+        if (archivedCount == 0) {
+            TextView none = text("В архиве товаров этой выкладки нет.", 13, MUTED, false);
+            none.setPadding(dp(4), dp(2), 0, 0);
+            wrap.addView(none);
+        }
+
         new AlertDialog.Builder(this)
                 .setTitle("Удалить выкладку?")
-                .setMessage("Будут удалены все карточки этой выкладки. Это действие нельзя отменить.")
+                .setView(wrap)
                 .setNegativeButton("Отмена", null)
                 .setPositiveButton("Удалить", (d, w) -> {
-                    db.deleteLayout(r.id);
+                    db.deleteLayout(r.id, deleteArchived.isChecked());
                     showHome();
                 })
                 .show();
