@@ -18,7 +18,7 @@ import java.util.Locale;
 
 public class DbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "yarn_notebook.db";
-    private static final int DB_VERSION = 4;
+    private static final int DB_VERSION = 5;
     private final Context appContext;
 
     public DbHelper(Context context) {
@@ -32,6 +32,7 @@ public class DbHelper extends SQLiteOpenHelper {
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "date_iso TEXT NOT NULL UNIQUE," +
                 "description TEXT NOT NULL DEFAULT ''," +
+                "hidden INTEGER NOT NULL DEFAULT 0," +
                 "created_at INTEGER NOT NULL)");
 
         db.execSQL("CREATE TABLE yarns (" +
@@ -98,6 +99,9 @@ public class DbHelper extends SQLiteOpenHelper {
             meta.put("meta_value", number);
             db.insertWithOnConflict("app_meta", null, meta, SQLiteDatabase.CONFLICT_REPLACE);
         }
+        if (oldVersion < 5) {
+            db.execSQL("ALTER TABLE layouts ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0");
+        }
     }
 
     public long createOrGetLayout(String dateIso) {
@@ -106,10 +110,17 @@ public class DbHelper extends SQLiteOpenHelper {
 
     public long createOrGetLayout(String dateIso, String description) {
         SQLiteDatabase db = getWritableDatabase();
-        Cursor c = db.rawQuery("SELECT id FROM layouts WHERE date_iso=?", new String[]{dateIso});
+        Cursor c = db.rawQuery("SELECT id,hidden FROM layouts WHERE date_iso=?", new String[]{dateIso});
         if (c.moveToFirst()) {
             long id = c.getLong(0);
+            boolean hidden = c.getInt(1) != 0;
             c.close();
+            if (hidden) {
+                ContentValues restore = new ContentValues();
+                restore.put("hidden", 0);
+                if (!n(description).isEmpty()) restore.put("description", n(description));
+                db.update("layouts", restore, "id=?", new String[]{String.valueOf(id)});
+            }
             return id;
         }
         c.close();
@@ -121,7 +132,7 @@ public class DbHelper extends SQLiteOpenHelper {
     }
 
     public boolean layoutExists(String dateIso) {
-        Cursor c = getReadableDatabase().rawQuery("SELECT 1 FROM layouts WHERE date_iso=? LIMIT 1", new String[]{dateIso});
+        Cursor c = getReadableDatabase().rawQuery("SELECT 1 FROM layouts WHERE date_iso=? AND hidden=0 LIMIT 1", new String[]{dateIso});
         boolean exists = c.moveToFirst();
         c.close();
         return exists;
@@ -152,20 +163,54 @@ public class DbHelper extends SQLiteOpenHelper {
     public List<LayoutRecord> getLayouts() {
         List<LayoutRecord> out = new ArrayList<>();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT l.id,l.date_iso,l.description,COUNT(y.id),COALESCE(SUM(CASE WHEN y.is_saved=0 THEN 1 ELSE 0 END),0) " +
+                "SELECT l.id,l.date_iso,l.description,l.hidden,COUNT(y.id),COALESCE(SUM(CASE WHEN y.is_saved=0 THEN 1 ELSE 0 END),0) " +
                         "FROM layouts l LEFT JOIN yarns y ON y.layout_id=l.id AND y.archived=0 " +
-                        "GROUP BY l.id,l.date_iso,l.description ORDER BY l.date_iso DESC", null);
+                        "WHERE l.hidden=0 " +
+                        "GROUP BY l.id,l.date_iso,l.description,l.hidden ORDER BY l.date_iso DESC", null);
         while (c.moveToNext()) {
             LayoutRecord r = new LayoutRecord();
             r.id = c.getLong(0);
             r.dateIso = c.getString(1);
             r.description = c.getString(2) == null ? "" : c.getString(2);
-            r.itemCount = c.getInt(3);
-            r.draftCount = c.getInt(4);
+            r.hidden = c.getInt(3) != 0;
+            r.itemCount = c.getInt(4);
+            r.draftCount = c.getInt(5);
             out.add(r);
         }
         c.close();
         return out;
+    }
+
+    private List<LayoutRecord> getLayoutsForBackup() {
+        List<LayoutRecord> out = new ArrayList<>();
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT id,date_iso,description,hidden FROM layouts ORDER BY date_iso DESC", null);
+        while (c.moveToNext()) {
+            LayoutRecord r = new LayoutRecord();
+            r.id = c.getLong(0);
+            r.dateIso = c.getString(1);
+            r.description = c.getString(2) == null ? "" : c.getString(2);
+            r.hidden = c.getInt(3) != 0;
+            out.add(r);
+        }
+        c.close();
+        return out;
+    }
+
+    private boolean isLayoutHidden(long layoutId) {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT hidden FROM layouts WHERE id=? LIMIT 1",
+                new String[]{String.valueOf(layoutId)});
+        boolean hidden = c.moveToFirst() && c.getInt(0) != 0;
+        c.close();
+        return hidden;
+    }
+
+    private void setLayoutHidden(long layoutId, boolean hidden) {
+        ContentValues values = new ContentValues();
+        values.put("hidden", hidden ? 1 : 0);
+        getWritableDatabase().update("layouts", values, "id=?",
+                new String[]{String.valueOf(layoutId)});
     }
 
     private String yarnSelect() {
@@ -345,7 +390,7 @@ public class DbHelper extends SQLiteOpenHelper {
     public String exportDatabaseJson() throws JSONException {
         JSONObject root = backupRoot("database");
         JSONArray layouts = new JSONArray();
-        for (LayoutRecord layout : getLayouts()) layouts.put(layoutToJson(layout.id));
+        for (LayoutRecord layout : getLayoutsForBackup()) layouts.put(layoutToJson(layout.id));
         root.put("layouts", layouts);
         return root.toString(2);
     }
@@ -373,6 +418,7 @@ public class DbHelper extends SQLiteOpenHelper {
         JSONObject layout = new JSONObject();
         layout.put("date", getLayoutDate(layoutId));
         layout.put("description", getLayoutDescription(layoutId));
+        layout.put("hidden", isLayoutHidden(layoutId));
         JSONArray yarns = new JSONArray();
         List<YarnRecord> items = getYarnsForLayoutForBackup(layoutId);
         for (int i = items.size() - 1; i >= 0; i--) yarns.put(yarnToJson(items.get(i)));
@@ -428,6 +474,7 @@ public class DbHelper extends SQLiteOpenHelper {
                 String date = l.optString("date").trim();
                 if (date.isEmpty()) continue;
                 String description = l.optString("description", "").trim();
+                boolean hiddenLayout = l.optBoolean("hidden", false);
                 long layoutId = createOrGetLayout(date, description);
                 if (!description.isEmpty() && getLayoutDescription(layoutId).trim().isEmpty()) {
                     updateLayoutDescription(layoutId, description);
@@ -460,6 +507,7 @@ public class DbHelper extends SQLiteOpenHelper {
                     saveYarn(r, r.saved);
                     result.yarns++;
                 }
+                if (hiddenLayout) setLayoutHidden(layoutId, true);
             }
             sql.setTransactionSuccessful();
         } finally {
@@ -667,6 +715,7 @@ public class DbHelper extends SQLiteOpenHelper {
         values.put("archived_at", 0);
         values.put("updated_at", System.currentTimeMillis());
         getWritableDatabase().update("yarns", values, "id=?", new String[]{String.valueOf(id)});
+        setLayoutHidden(record.layoutId, false);
         return true;
     }
 
@@ -684,6 +733,15 @@ public class DbHelper extends SQLiteOpenHelper {
         values.put("updated_at", System.currentTimeMillis());
         return getWritableDatabase().update(
                 "yarns", values, "TRIM(photo_file)<>''", null);
+    }
+
+    public int getArchivedCountForLayout(long layoutId) {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM yarns WHERE layout_id=? AND archived=1",
+                new String[]{String.valueOf(layoutId)});
+        int count = c.moveToFirst() ? c.getInt(0) : 0;
+        c.close();
+        return count;
     }
 
     public int getArchivedCount() {
@@ -736,17 +794,57 @@ public class DbHelper extends SQLiteOpenHelper {
         YarnRecord record = getYarn(id);
         if (record != null) PhotoStore.deletePhoto(appContext, record);
         getWritableDatabase().delete("yarns", "id=?", new String[]{String.valueOf(id)});
+
+        if (record != null && isLayoutHidden(record.layoutId)) {
+            Cursor c = getReadableDatabase().rawQuery(
+                    "SELECT COUNT(*) FROM yarns WHERE layout_id=?",
+                    new String[]{String.valueOf(record.layoutId)});
+            int remaining = c.moveToFirst() ? c.getInt(0) : 0;
+            c.close();
+            if (remaining == 0) {
+                getWritableDatabase().delete("layouts", "id=?",
+                        new String[]{String.valueOf(record.layoutId)});
+            }
+        }
     }
 
-    public void deleteLayout(long id) {
-        for (YarnRecord record : getYarnsForLayoutForBackup(id)) {
-            PhotoStore.deletePhoto(appContext, record);
+    public void deleteLayout(long id, boolean deleteArchived) {
+        List<YarnRecord> records = getYarnsForLayoutForBackup(id);
+
+        if (deleteArchived) {
+            for (YarnRecord record : records) PhotoStore.deletePhoto(appContext, record);
+            SQLiteDatabase db = getWritableDatabase();
+            db.beginTransaction();
+            try {
+                db.delete("yarns", "layout_id=?", new String[]{String.valueOf(id)});
+                db.delete("layouts", "id=?", new String[]{String.valueOf(id)});
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
+            return;
         }
+
+        for (YarnRecord record : records) {
+            if (!record.archived) PhotoStore.deletePhoto(appContext, record);
+        }
+
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
         try {
-            db.delete("yarns", "layout_id=?", new String[]{String.valueOf(id)});
-            db.delete("layouts", "id=?", new String[]{String.valueOf(id)});
+            db.delete("yarns", "layout_id=? AND archived=0", new String[]{String.valueOf(id)});
+            Cursor c = db.rawQuery("SELECT COUNT(*) FROM yarns WHERE layout_id=? AND archived=1",
+                    new String[]{String.valueOf(id)});
+            int archivedLeft = c.moveToFirst() ? c.getInt(0) : 0;
+            c.close();
+
+            if (archivedLeft > 0) {
+                ContentValues hidden = new ContentValues();
+                hidden.put("hidden", 1);
+                db.update("layouts", hidden, "id=?", new String[]{String.valueOf(id)});
+            } else {
+                db.delete("layouts", "id=?", new String[]{String.valueOf(id)});
+            }
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
