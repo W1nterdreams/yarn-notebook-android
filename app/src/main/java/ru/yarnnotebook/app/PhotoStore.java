@@ -238,21 +238,76 @@ public final class PhotoStore {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             Uri collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
-            String[] projection = {MediaStore.Images.Media._ID};
-            String selection = MediaStore.Images.Media.DISPLAY_NAME + "=? AND " +
-                    MediaStore.Images.Media.RELATIVE_PATH + "=?";
-            String[] args = {name, relativePath(record, archived)};
+
+            // Некоторые прошивки Android нормализуют RELATIVE_PATH по-разному
+            // (например, убирают завершающий "/"). Поэтому не требуем точного
+            // совпадения пути: имя yarn_<номер>.jpg у нас уникально.
+            String[] projection = {
+                    MediaStore.Images.Media._ID,
+                    MediaStore.Images.Media.RELATIVE_PATH,
+                    MediaStore.Images.Media.OWNER_PACKAGE_NAME
+            };
+            String selection = MediaStore.Images.Media.DISPLAY_NAME + "=?";
+            String[] args = {name};
+
+            Uri ownedFallback = null;
             try (Cursor c = context.getContentResolver().query(
-                    collection, projection, selection, args, null)) {
-                if (c != null && c.moveToFirst()) {
-                    return ContentUris.withAppendedId(collection, c.getLong(0));
+                    collection, projection, selection, args,
+                    MediaStore.Images.Media.DATE_ADDED + " DESC")) {
+                if (c != null) {
+                    int idCol = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
+                    int pathCol = c.getColumnIndex(MediaStore.Images.Media.RELATIVE_PATH);
+                    int ownerCol = c.getColumnIndex(MediaStore.Images.Media.OWNER_PACKAGE_NAME);
+
+                    while (c.moveToNext()) {
+                        long id = c.getLong(idCol);
+                        String rel = pathCol >= 0 && !c.isNull(pathCol) ? c.getString(pathCol) : "";
+                        String owner = ownerCol >= 0 && !c.isNull(ownerCol) ? c.getString(ownerCol) : "";
+                        Uri candidate = ContentUris.withAppendedId(collection, id);
+
+                        if (isOurPublicPath(rel)) return candidate;
+                        if (context.getPackageName().equals(owner) && ownedFallback == null) {
+                            ownedFallback = candidate;
+                        }
+                    }
                 }
             } catch (Exception ignored) { }
-            return null;
+
+            return ownedFallback;
         }
 
         File file = publicFile(record, archived, name);
-        return file.isFile() ? Uri.fromFile(file) : null;
+        if (file.isFile()) return Uri.fromFile(file);
+
+        // На старых Android также допускаем поиск по всем подпапкам "Моя пряжа".
+        File fallback = findByName(publicRoot(), name);
+        return fallback != null ? Uri.fromFile(fallback) : null;
+    }
+
+    private static boolean isOurPublicPath(String relativePath) {
+        if (relativePath == null) return false;
+        String path = relativePath.replace('\\', '/').trim();
+        while (path.startsWith("/")) path = path.substring(1);
+        while (path.endsWith("/")) path = path.substring(0, path.length() - 1);
+
+        String root = (Environment.DIRECTORY_PICTURES + "/" + PUBLIC_ROOT).replace('\\', '/');
+        return path.equals(root) || path.startsWith(root + "/");
+    }
+
+    private static File findByName(File dir, String name) {
+        if (dir == null || !dir.isDirectory() || name == null || name.isEmpty()) return null;
+        File[] children = dir.listFiles();
+        if (children == null) return null;
+
+        for (File child : children) {
+            if (child == null) continue;
+            if (child.isFile() && name.equals(child.getName())) return child;
+            if (child.isDirectory()) {
+                File found = findByName(child, name);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private static Uri createVisibleUri(Context context, YarnRecord record, boolean archived, String name)
@@ -465,23 +520,24 @@ public final class PhotoStore {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             Uri collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
-            String root = Environment.DIRECTORY_PICTURES + "/" + PUBLIC_ROOT + "/";
             String[] projection = {
                     MediaStore.Images.Media.RELATIVE_PATH,
                     MediaStore.Images.Media.SIZE
             };
-            String selection = MediaStore.Images.Media.RELATIVE_PATH + " LIKE ? AND " +
-                    MediaStore.Images.Media.DISPLAY_NAME + " LIKE ?";
-            String[] args = {root + "%", "yarn_%.jpg"};
+            String selection = MediaStore.Images.Media.DISPLAY_NAME + " LIKE ?";
+            String[] args = {"yarn_%.jpg"};
 
             try (Cursor c = context.getContentResolver().query(
                     collection, projection, selection, args, null)) {
                 if (c != null) {
                     while (c.moveToNext()) {
                         String rel = c.getString(0);
+                        if (!isOurPublicPath(rel)) continue;
+
                         long size = c.isNull(1) ? 0L : c.getLong(1);
-                        boolean archive = rel != null && rel.equals(
-                                Environment.DIRECTORY_PICTURES + "/" + PUBLIC_ROOT + "/" + PUBLIC_ARCHIVE + "/");
+                        String normalized = rel == null ? "" : rel.replace('\\', '/');
+                        boolean archive = normalized.contains("/" + PUBLIC_ROOT + "/" + PUBLIC_ARCHIVE) ||
+                                normalized.endsWith(PUBLIC_ROOT + "/" + PUBLIC_ARCHIVE);
                         if (archive) {
                             stats.archiveFiles++;
                             stats.archiveBytes += size;
@@ -535,24 +591,25 @@ public final class PhotoStore {
     private static void clearVisibleStorage(Context context, boolean archiveOnly) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             Uri collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
-            String root = Environment.DIRECTORY_PICTURES + "/" + PUBLIC_ROOT + "/";
-            String selection;
-            String[] args;
-            if (archiveOnly) {
-                selection = MediaStore.Images.Media.RELATIVE_PATH + "=? AND " +
-                        MediaStore.Images.Media.DISPLAY_NAME + " LIKE ?";
-                args = new String[]{root + PUBLIC_ARCHIVE + "/", "yarn_%.jpg"};
-            } else {
-                selection = MediaStore.Images.Media.RELATIVE_PATH + " LIKE ? AND " +
-                        MediaStore.Images.Media.DISPLAY_NAME + " LIKE ?";
-                args = new String[]{root + "%", "yarn_%.jpg"};
-            }
+            String selection = MediaStore.Images.Media.DISPLAY_NAME + " LIKE ?";
+            String[] args = {"yarn_%.jpg"};
 
-            String[] projection = {MediaStore.Images.Media._ID};
+            String[] projection = {
+                    MediaStore.Images.Media._ID,
+                    MediaStore.Images.Media.RELATIVE_PATH
+            };
             try (Cursor c = context.getContentResolver().query(
                     collection, projection, selection, args, null)) {
                 if (c != null) {
                     while (c.moveToNext()) {
+                        String rel = c.isNull(1) ? "" : c.getString(1);
+                        if (!isOurPublicPath(rel)) continue;
+
+                        String normalized = rel.replace('\\', '/');
+                        boolean archive = normalized.contains("/" + PUBLIC_ROOT + "/" + PUBLIC_ARCHIVE) ||
+                                normalized.endsWith(PUBLIC_ROOT + "/" + PUBLIC_ARCHIVE);
+                        if (archiveOnly && !archive) continue;
+
                         Uri uri = ContentUris.withAppendedId(collection, c.getLong(0));
                         deleteUri(context, uri);
                     }
