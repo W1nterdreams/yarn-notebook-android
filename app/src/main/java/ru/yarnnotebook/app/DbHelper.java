@@ -694,6 +694,15 @@ public class DbHelper extends SQLiteOpenHelper {
         return count;
     }
 
+    public List<YarnRecord> getAllYarnsForPhotoMigration() {
+        List<YarnRecord> out = new ArrayList<>();
+        Cursor c = getReadableDatabase().rawQuery(
+                yarnSelect() + "FROM yarns y JOIN layouts l ON l.id=y.layout_id ORDER BY y.id ASC", null);
+        while (c.moveToNext()) out.add(readYarn(c));
+        c.close();
+        return out;
+    }
+
     public List<YarnRecord> searchArchive(String query) {
         List<YarnRecord> out = new ArrayList<>();
         String q = query == null ? "" : query.trim();
