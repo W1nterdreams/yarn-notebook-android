@@ -4,36 +4,56 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
+import android.net.Uri;
 import android.os.Build;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 public final class PhotoStore {
-    private static final String ROOT = "product_photos";
+    private static final String LAYOUTS_ROOT = "layouts";
+    private static final String PHOTOS = "photos";
     private static final String ACTIVE = "active";
     private static final String ARCHIVE = "archive";
+
+    // Папки версии 0.2.22. Нужны только для мягкой миграции старых фото.
+    private static final String LEGACY_ROOT = "product_photos";
+
     private static final int MAX_SIDE = 1200;
     private static final int JPEG_QUALITY = 78;
 
     private PhotoStore() { }
 
-    public static File activeDir(Context context) {
-        return ensure(new File(context.getFilesDir(), ROOT + File.separator + ACTIVE));
+    private static File layoutDir(Context context, long layoutId) {
+        return ensure(new File(context.getFilesDir(),
+                LAYOUTS_ROOT + File.separator + "layout_" + layoutId));
     }
 
-    public static File archiveDir(Context context) {
-        return ensure(new File(context.getFilesDir(), ROOT + File.separator + ARCHIVE));
+    private static File photosDir(Context context, long layoutId) {
+        return ensure(new File(layoutDir(context, layoutId), PHOTOS));
     }
 
-    public static File cameraTempDir(Context context) {
-        return ensure(new File(context.getCacheDir(), "camera"));
+    private static File activeDir(Context context, long layoutId) {
+        return ensure(new File(photosDir(context, layoutId), ACTIVE));
     }
 
-    public static File newCameraTempFile(Context context) throws IOException {
-        return File.createTempFile("yarn_camera_", ".jpg", cameraTempDir(context));
+    private static File archiveDir(Context context, long layoutId) {
+        return ensure(new File(photosDir(context, layoutId), ARCHIVE));
+    }
+
+    private static File legacyActiveDir(Context context) {
+        return ensure(new File(context.getFilesDir(), LEGACY_ROOT + File.separator + ACTIVE));
+    }
+
+    private static File legacyArchiveDir(Context context) {
+        return ensure(new File(context.getFilesDir(), LEGACY_ROOT + File.separator + ARCHIVE));
+    }
+
+    private static File galleryTempDir(Context context) {
+        return ensure(new File(context.getCacheDir(), "gallery"));
     }
 
     public static String fileName(long internalNumber) {
@@ -42,8 +62,20 @@ public final class PhotoStore {
 
     public static File photoFile(Context context, YarnRecord record) {
         if (record == null || record.photoFile == null || record.photoFile.trim().isEmpty()) return null;
-        File dir = record.archived ? archiveDir(context) : activeDir(context);
-        return new File(dir, record.photoFile.trim());
+
+        File target = new File(
+                record.archived ? archiveDir(context, record.layoutId) : activeDir(context, record.layoutId),
+                record.photoFile.trim());
+        if (target.isFile()) return target;
+
+        File legacy = new File(
+                record.archived ? legacyArchiveDir(context) : legacyActiveDir(context),
+                record.photoFile.trim());
+        if (!legacy.isFile()) return target;
+
+        // При первом обращении переносим фото 0.2.22 в папку соответствующей выкладки.
+        if (moveFile(legacy, target)) return target;
+        return legacy;
     }
 
     public static boolean exists(Context context, YarnRecord record) {
@@ -51,7 +83,29 @@ public final class PhotoStore {
         return file != null && file.isFile();
     }
 
-    public static String saveCompressed(Context context, File source, long internalNumber, boolean archived) throws IOException {
+    public static String saveCompressed(Context context, Uri sourceUri, YarnRecord record) throws IOException {
+        if (sourceUri == null) throw new IOException("Фотография не выбрана");
+        if (record == null || record.internalNumber <= 0 || record.layoutId <= 0) {
+            throw new IOException("Карточка товара ещё не сохранена");
+        }
+
+        File tempSource = File.createTempFile("yarn_gallery_", ".img", galleryTempDir(context));
+        try {
+            try (InputStream in = context.getContentResolver().openInputStream(sourceUri);
+                 FileOutputStream out = new FileOutputStream(tempSource)) {
+                if (in == null) throw new IOException("Не удалось открыть выбранную фотографию");
+                byte[] buffer = new byte[32 * 1024];
+                int read;
+                while ((read = in.read(buffer)) >= 0) out.write(buffer, 0, read);
+                out.flush();
+            }
+            return saveCompressedFile(context, tempSource, record);
+        } finally {
+            if (tempSource.exists()) tempSource.delete();
+        }
+    }
+
+    private static String saveCompressedFile(Context context, File source, YarnRecord record) throws IOException {
         if (source == null || !source.isFile()) throw new IOException("Фотография не найдена");
 
         BitmapFactory.Options bounds = new BitmapFactory.Options();
@@ -85,8 +139,10 @@ public final class PhotoStore {
             bitmap = scaled;
         }
 
-        String name = fileName(internalNumber);
-        File dir = archived ? archiveDir(context) : activeDir(context);
+        String name = fileName(record.internalNumber);
+        File dir = record.archived
+                ? archiveDir(context, record.layoutId)
+                : activeDir(context, record.layoutId);
         File target = new File(dir, name);
         File temp = new File(dir, name + ".tmp");
 
@@ -107,6 +163,13 @@ public final class PhotoStore {
             temp.delete();
             throw new IOException("Не удалось сохранить фотографию");
         }
+
+        // Если карточка пришла из 0.2.22 и старое фото ещё осталось в общей папке — убираем его.
+        File legacy = new File(
+                record.archived ? legacyArchiveDir(context) : legacyActiveDir(context),
+                name);
+        if (legacy.exists()) legacy.delete();
+
         return name;
     }
 
@@ -130,8 +193,21 @@ public final class PhotoStore {
     }
 
     public static void deletePhoto(Context context, YarnRecord record) {
-        File file = photoFile(context, record);
-        if (file != null && file.exists()) file.delete();
+        if (record == null || record.photoFile == null || record.photoFile.trim().isEmpty()) return;
+        String name = record.photoFile.trim();
+
+        File current = new File(
+                record.archived ? archiveDir(context, record.layoutId) : activeDir(context, record.layoutId),
+                name);
+        if (current.exists()) current.delete();
+
+        // На случай карточки, фото которой ещё не успело мигрировать из 0.2.22.
+        File legacy = new File(
+                record.archived ? legacyArchiveDir(context) : legacyActiveDir(context),
+                name);
+        if (legacy.exists()) legacy.delete();
+
+        cleanupEmptyLayoutFolders(context, record.layoutId);
     }
 
     public static boolean moveToArchive(Context context, YarnRecord record) {
@@ -144,10 +220,25 @@ public final class PhotoStore {
 
     private static boolean move(Context context, YarnRecord record, boolean toArchive) {
         if (record == null || record.photoFile == null || record.photoFile.trim().isEmpty()) return true;
-        File from = new File(record.archived ? archiveDir(context) : activeDir(context), record.photoFile.trim());
-        if (!from.exists()) return true;
 
-        File to = new File(toArchive ? archiveDir(context) : activeDir(context), record.photoFile.trim());
+        File from = photoFile(context, record);
+        if (from == null || !from.isFile()) return true;
+
+        File to = new File(
+                toArchive ? archiveDir(context, record.layoutId) : activeDir(context, record.layoutId),
+                record.photoFile.trim());
+        if (from.equals(to)) return true;
+
+        boolean ok = moveFile(from, to);
+        if (ok) cleanupEmptyLayoutFolders(context, record.layoutId);
+        return ok;
+    }
+
+    private static boolean moveFile(File from, File to) {
+        if (from == null || !from.isFile()) return false;
+        File parent = to.getParentFile();
+        if (parent != null) ensure(parent);
+
         if (to.exists() && !to.delete()) return false;
         if (from.renameTo(to)) return true;
 
@@ -157,7 +248,11 @@ public final class PhotoStore {
             int read;
             while ((read = in.read(buffer)) >= 0) out.write(buffer, 0, read);
             out.flush();
-            return from.delete();
+            if (!from.delete()) {
+                to.delete();
+                return false;
+            }
+            return true;
         } catch (Exception ignored) {
             if (to.exists()) to.delete();
             return false;
@@ -185,6 +280,24 @@ public final class PhotoStore {
         } catch (Exception ignored) {
             return bitmap;
         }
+    }
+
+    private static void cleanupEmptyLayoutFolders(Context context, long layoutId) {
+        File layout = new File(new File(context.getFilesDir(), LAYOUTS_ROOT), "layout_" + layoutId);
+        File photos = new File(layout, PHOTOS);
+        File active = new File(photos, ACTIVE);
+        File archive = new File(photos, ARCHIVE);
+
+        deleteIfEmpty(active);
+        deleteIfEmpty(archive);
+        deleteIfEmpty(photos);
+        deleteIfEmpty(layout);
+    }
+
+    private static void deleteIfEmpty(File dir) {
+        if (dir == null || !dir.isDirectory()) return;
+        File[] children = dir.listFiles();
+        if (children != null && children.length == 0) dir.delete();
     }
 
     private static File ensure(File dir) {
