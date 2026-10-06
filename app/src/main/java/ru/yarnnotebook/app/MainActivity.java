@@ -1621,12 +1621,40 @@ public class MainActivity extends Activity {
 
     private void ensureDescriptionVisible(ScrollView scroll) {
         if (fDescription == null || !fDescription.hasFocus()) return;
-        android.graphics.Rect rect = new android.graphics.Rect();
-        fDescription.getDrawingRect(rect);
-        scroll.offsetDescendantRectToMyCoords(fDescription, rect);
-        int visibleBottom = scroll.getHeight() - dp(18);
-        int delta = rect.bottom - visibleBottom;
-        if (delta > 0) scroll.scrollBy(0, delta + dp(12));
+
+        android.text.Layout layout = fDescription.getLayout();
+        if (layout == null) return;
+
+        int selection = fDescription.getSelectionStart();
+        if (selection < 0) selection = 0;
+        selection = Math.min(selection, fDescription.getText().length());
+
+        int line = layout.getLineForOffset(selection);
+        int localTop = fDescription.getCompoundPaddingTop()
+                + layout.getLineTop(line)
+                - fDescription.getScrollY();
+        int localBottom = fDescription.getCompoundPaddingTop()
+                + layout.getLineBottom(line)
+                - fDescription.getScrollY();
+
+        android.graphics.Rect cursorRect = new android.graphics.Rect(
+                fDescription.getCompoundPaddingLeft(),
+                localTop,
+                Math.max(fDescription.getCompoundPaddingLeft() + dp(8),
+                        fDescription.getWidth() - fDescription.getCompoundPaddingRight()),
+                localBottom);
+
+        scroll.offsetDescendantRectToMyCoords(fDescription, cursorRect);
+
+        int margin = dp(18);
+        int visibleTop = scroll.getScrollY() + margin;
+        int visibleBottom = scroll.getScrollY() + scroll.getHeight() - margin;
+
+        if (cursorRect.bottom > visibleBottom) {
+            scroll.scrollBy(0, cursorRect.bottom - visibleBottom + dp(8));
+        } else if (cursorRect.top < visibleTop) {
+            scroll.scrollBy(0, cursorRect.top - visibleTop - dp(8));
+        }
     }
 
     private void copyVkText(YarnRecord r) {
