@@ -74,6 +74,8 @@ public class MainActivity extends Activity {
     private final int BORDER = Color.rgb(222, 214, 209);
     private final int COMPOSITION_OK = Color.rgb(46, 125, 50);
     private final int COMPOSITION_BAD = Color.rgb(198, 40, 40);
+    private final int VALIDATION_BG = Color.rgb(255, 235, 238);
+    private final int VALIDATION_ACCENT = Color.rgb(183, 28, 28);
 
     private DbHelper db;
     private long currentLayoutId = 0;
@@ -905,7 +907,7 @@ public class MainActivity extends Activity {
         LinearLayout form = vertical();
         form.setPadding(dp(14), dp(14), dp(14), dp(36));
 
-        TextView note = text("Все поля необязательные", 14, MUTED, false);
+        TextView note = text("Обязательные поля отмечены *", 14, MUTED, false);
         note.setPadding(dp(2), 0, 0, dp(12));
         form.addView(note);
 
@@ -961,7 +963,7 @@ public class MainActivity extends Activity {
 
         EditText[] lengthThread = addInlineFields(
                 form,
-                "Метраж, м / 100 г", "280", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL,
+                "Метраж, м / 100 г *", "280", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL,
                 "Параметры нити", "Например: 1/3/4", textCaps,
                 0.44f, 0.56f);
         fLength = lengthThread[0];
@@ -969,8 +971,8 @@ public class MainActivity extends Activity {
 
         EditText[] availabilityPrice = addInlineFields(
                 form,
-                "Наличие, г", "400", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL,
-                "Цена, ₽ / 100 г", "350", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL,
+                "Вес / наличие, г *", "400", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL,
+                "Цена, ₽ / 100 г *", "350", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL,
                 0.45f, 0.55f);
         fAvailability = availabilityPrice[0];
         fPrice = availabilityPrice[1];
@@ -1074,7 +1076,7 @@ public class MainActivity extends Activity {
         sp.setMargins(0, dp(12), 0, dp(8));
         form.addView(save, sp);
         save.setOnClickListener(v -> {
-            if (!validateComposition()) return;
+            if (!validateEditor()) return;
             YarnRecord r = collect(existing);
             long id = db.saveYarn(r, true);
             currentYarnId = id;
@@ -1088,7 +1090,7 @@ public class MainActivity extends Activity {
         cp.setMargins(0, 0, 0, dp(8));
         form.addView(copy, cp);
         copy.setOnClickListener(v -> {
-            if (!validateComposition()) return;
+            if (!validateEditor()) return;
             YarnRecord current = collect(existing);
             if (current.id == 0 || current.internalNumber <= 0) {
                 db.saveYarn(current, false);
@@ -1104,7 +1106,7 @@ public class MainActivity extends Activity {
             dpv.setMargins(0, 0, 0, dp(8));
             form.addView(duplicate, dpv);
             duplicate.setOnClickListener(v -> {
-                if (!validateComposition()) return;
+                if (!validateEditor()) return;
                 YarnRecord current = collect(existing);
                 db.saveYarn(current, existing.saved);
                 long copyId = db.duplicateYarn(existing.id);
@@ -1385,6 +1387,70 @@ public class MainActivity extends Activity {
         return b.toString();
     }
 
+    private boolean validateEditor() {
+        return validateRequiredFields() && validateComposition();
+    }
+
+    private boolean validateRequiredFields() {
+        if (blank(s(fLength))) {
+            showValidationError("Укажите метраж пряжи.", fLength);
+            return false;
+        }
+        if (blank(s(fPrice))) {
+            showValidationError("Укажите цену за 100 г.", fPrice);
+            return false;
+        }
+        if (blank(s(fAvailability))) {
+            showValidationError("Укажите основной вес / наличие в граммах.", fAvailability);
+            return false;
+        }
+        return true;
+    }
+
+    private void showValidationError(String message, EditText target) {
+        if (target != null) target.setError("Обязательное поле");
+
+        LinearLayout panel = vertical();
+        panel.setPadding(dp(18), dp(16), dp(18), dp(16));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(VALIDATION_BG);
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(2), VALIDATION_ACCENT);
+        panel.setBackground(bg);
+
+        TextView title = text("Не заполнено обязательное поле", 16, VALIDATION_ACCENT, true);
+        title.setPadding(0, 0, 0, dp(8));
+        panel.addView(title);
+
+        TextView body = text(message, 15, TEXT, false);
+        panel.addView(body);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(panel)
+                .setPositiveButton("Понятно", null)
+                .create();
+
+        dialog.setOnShowListener(d -> {
+            Button button = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            if (button != null) {
+                button.setTextColor(VALIDATION_ACCENT);
+                button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            }
+        });
+        dialog.setOnDismissListener(d -> {
+            if (target != null) {
+                target.requestFocus();
+                target.post(() -> {
+                    InputMethodManager imm =
+                            (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) imm.showSoftInput(target, InputMethodManager.SHOW_IMPLICIT);
+                });
+            }
+        });
+        dialog.show();
+    }
+
     private boolean validateComposition() {
         BigDecimal total = BigDecimal.ZERO;
         boolean hasComposition = false;
@@ -1397,34 +1463,30 @@ public class MainActivity extends Activity {
             hasComposition = true;
 
             if (blank(percentText)) {
-                Toast.makeText(this, "Укажите процент для каждого компонента состава", Toast.LENGTH_LONG).show();
-                row.percent.requestFocus();
+                showValidationError("Укажите процент для каждого компонента состава.", row.percent);
                 return false;
             }
             if (blank(material)) {
-                Toast.makeText(this, "Укажите сырьё для каждого процента состава", Toast.LENGTH_LONG).show();
-                row.material.requestFocus();
+                showValidationError("Укажите сырьё для каждого процента состава.", row.material);
                 return false;
             }
 
             try {
                 BigDecimal value = new BigDecimal(percentText);
                 if (value.compareTo(BigDecimal.ZERO) <= 0 || value.compareTo(new BigDecimal("100")) > 0) {
-                    Toast.makeText(this, "Процент каждого компонента должен быть больше 0 и не больше 100", Toast.LENGTH_LONG).show();
-                    row.percent.requestFocus();
+                    showValidationError("Процент каждого компонента должен быть больше 0 и не больше 100.", row.percent);
                     return false;
                 }
                 total = total.add(value);
             } catch (NumberFormatException e) {
-                Toast.makeText(this, "Проверьте процент в составе", Toast.LENGTH_LONG).show();
-                row.percent.requestFocus();
+                showValidationError("Проверьте процент в составе.", row.percent);
                 return false;
             }
         }
 
         if (hasComposition && total.compareTo(new BigDecimal("100")) != 0) {
             String value = total.stripTrailingZeros().toPlainString().replace('.', ',');
-            Toast.makeText(this, "Сумма состава сейчас " + value + "%. Должно быть 100%", Toast.LENGTH_LONG).show();
+            showValidationError("Сумма состава сейчас " + value + "%. Должно быть 100%.", null);
             return false;
         }
         return true;
